@@ -1,8 +1,14 @@
 
 import React, { useState } from 'react';
 import { UserRole, AgentProfile } from '../types';
-import { BRAND_NAME, LOGO_TEXT } from '../constants';
+import { BRAND_NAME } from '../constants';
 import { supabaseService } from '../supabaseClient';
+
+const AppLogoIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} viewBox="0 0 36 36" fill="currentColor">
+    <path d="M 32 17 h -1.051 a 12.929 12.929 0 0 0 -3.088 -7.447 l 1.159 -1.159 a 0.999 0.999 0 1 0 -1.414 -1.414 l -1.159 1.159 A 12.926 12.926 0 0 0 19 5.051 V 4 a 1 1 0 1 0 -2 0 v 1.051 a 12.932 12.932 0 0 0 -7.448 3.088 L 8.487 7.073 a 0.999 0.999 0 1 0 -1.414 1.414 l 1.066 1.066 A 12.922 12.922 0 0 0 5.051 17 H 4 a 1 1 0 1 0 0 2 h 1.051 a 12.926 12.926 0 0 0 3.088 7.447 L 6.98 27.606 a 0.999 0.999 0 1 0 1.414 1.414 l 1.159 -1.159 A 12.929 12.929 0 0 0 17 30.949 V 32 a 1 1 0 1 0 2 0 v -1.051 a 12.931 12.931 0 0 0 7.447 -3.088 l 1.066 1.066 a 0.997 0.997 0 0 0 1.414 0 a 0.999 0.999 0 0 0 0 -1.414 l -1.066 -1.066 a 12.932 12.932 0 0 0 3.088 -7.448 H 32 A 1 1 0 1 0 32 17 Z m -5.552 -6.033 A 10.943 10.943 0 0 1 28.949 17 h -6.04 a 4.96 4.96 0 0 0 -0.707 -1.788 l 4.246 -4.245 Z M 19 7.051 a 10.954 10.954 0 0 1 6.034 2.501 l -4.22 4.22 A 4.964 4.964 0 0 0 19 13.001 v -5.95 Z M 21 17.9 c 0 1.654 -1.346 3 -3 3 s -3 -1.346 -3 -3 s 1.346 -3 3 -3 s 3 1.346 3 3 Z M 17 7.051 v 5.95 a 4.964 4.964 0 0 0 -1.814 0.771 l -4.22 -4.22 A 10.95 10.95 0 0 1 17 7.051 Z m -7.448 3.916 l 4.246 4.246 a 4.96 4.96 0 0 0 -0.707 1.788 h -6.04 a 10.94 10.94 0 0 1 2.501 -6.034 Z m 0 14.067 A 10.946 10.946 0 0 1 7.051 19 h 6.08 a 4.99 4.99 0 0 0 0.741 1.714 l -4.32 4.32 Z M 17 28.949 a 10.954 10.954 0 0 1 -6.034 -2.501 l 4.345 -4.345 a 4.96 4.96 0 0 0 1.688 0.697 v 6.149 Z m 2 0 v -6.15 a 4.96 4.96 0 0 0 1.688 -0.697 l 4.345 4.346 A 10.94 10.94 0 0 1 19 28.949 Z m 7.447 -3.915 l -4.32 -4.32 a 4.95 4.95 0 0 0 0.741 -1.715 h 6.08 a 10.936 10.936 0 0 1 -2.501 6.035 Z" />
+  </svg>
+);
 
 interface ProfileDrawerProps {
   isOpen: boolean;
@@ -149,8 +155,8 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
           </button>
 
           <div className="flex items-center space-x-5 mb-8 relative z-10">
-            <div className="w-20 h-20 rounded-[2rem] bg-yellow-400 flex items-center justify-center text-4xl shadow-2xl border-4 border-slate-800 rotate-3">
-               {currentRole === UserRole.DRIVER ? '👨‍✈️' : (isLoggedIn ? '👤' : '🛞')}
+            <div className="w-20 h-20 rounded-[2rem] bg-yellow-400 flex items-center justify-center text-slate-900 shadow-2xl border-4 border-slate-800 rotate-3">
+               <AppLogoIcon className="w-10 h-10" />
             </div>
             <div>
               <h2 className="text-2xl font-black tracking-tighter truncate max-w-[180px]">
@@ -337,9 +343,11 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
 
         <div className="p-8 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
            <div className="flex items-center space-x-3">
-             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-yellow-400 text-sm shadow-lg">🛞</div>
+             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-yellow-400 shadow-lg">
+                <AppLogoIcon className="w-5 h-5" />
+             </div>
              <p className="text-[10px] font-black uppercase text-slate-900 tracking-tighter">
-               {BRAND_NAME} <span className="text-yellow-600">{LOGO_TEXT}</span>
+               {BRAND_NAME}
              </p>
            </div>
         </div>

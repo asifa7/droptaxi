@@ -11,6 +11,15 @@ export enum PoolType {
   URBAN_POOL = 'URBAN_POOL'
 }
 
+export enum PoolStatus {
+  IDLE = 'IDLE',
+  WAITING = 'WAITING',
+  FILLING = 'FILLING',
+  LOCKED = 'LOCKED',
+  DISPATCHED = 'DISPATCHED',
+  CANCELLED = 'CANCELLED'
+}
+
 export enum UserRole {
   USER = 'USER',
   DRIVER = 'DRIVER'
@@ -62,8 +71,10 @@ export interface BookingDetails {
   time: string;
   tripType: TripType;
   poolType: PoolType;
-  isRecurring?: boolean; // For Office Pool
-  useVirtualStop?: boolean; // Walk to save time
+  poolStatus?: PoolStatus;
+  poolCount?: number;
+  isRecurring?: boolean; 
+  useVirtualStop?: boolean;
   phone?: string;
   recipientPhone?: string;
   isForSomeoneElse: boolean;

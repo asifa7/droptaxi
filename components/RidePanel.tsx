@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { AppState, CarCategory, BookingDetails, TripType, PoolType } from '../types';
+import { AppState, CarCategory, BookingDetails, TripType, PoolType, PoolStatus } from '../types';
 import { CAR_OPTIONS, CarOption, PHONE_NUMBER } from '../constants';
 import { getTripInsights } from '../geminiService';
 
@@ -16,14 +16,17 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
   const [showModal, setShowModal] = useState(false);
   const [modalCar, setModalCar] = useState<CarOption | null>(null);
   const [distanceKm, setDistanceKm] = useState<number>(250);
+  
+  // Pooling UI State
+  const [poolStatus, setPoolStatus] = useState<PoolStatus>(PoolStatus.IDLE);
+  const [poolTimer, setPoolTimer] = useState(90);
+  const [passengerCount, setPassengerCount] = useState(1);
 
   useEffect(() => {
     const fetchDist = async () => {
       if (bookingDetails?.from && bookingDetails?.to) {
-        // Passing current coords if available for better grounding
         const insights = await getTripInsights(bookingDetails.from, bookingDetails.to, bookingDetails.fromCoords);
         if (insights?.distance) {
-          // Robust parsing of distance string like "350.5 km"
           const numeric = parseFloat(insights.distance.replace(/[^\d.]/g, ''));
           if (!isNaN(numeric)) setDistanceKm(numeric);
         }
@@ -32,6 +35,37 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
     if (appState === AppState.SELECTING_VEHICLE) fetchDist();
   }, [bookingDetails, appState]);
 
+  // Pool Logic Simulator
+  useEffect(() => {
+    let interval: any;
+    if (appState === AppState.SEARCHING_DRIVER && bookingDetails?.poolType !== PoolType.SOLO) {
+      setPoolStatus(PoolStatus.WAITING);
+      interval = setInterval(() => {
+        setPoolTimer((prev) => {
+          if (prev <= 0) {
+            setPoolStatus(PoolStatus.LOCKED);
+            clearInterval(interval);
+            return 0;
+          }
+          // Random match simulation logic
+          if (prev === 75) {
+            setPassengerCount(2);
+            setPoolStatus(PoolStatus.FILLING);
+          }
+          if (prev === 40 && Math.random() > 0.5) {
+            setPassengerCount(3);
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setPoolTimer(90);
+      setPassengerCount(1);
+      setPoolStatus(PoolStatus.IDLE);
+    }
+    return () => clearInterval(interval);
+  }, [appState, bookingDetails?.poolType]);
+
   const calculateTotal = (car: CarOption) => {
     const isRound = bookingDetails?.tripType === TripType.ROUND_TRIP;
     const rate = isRound ? car.roundTripPrice : car.oneWayPrice;
@@ -39,7 +73,6 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
     const effectiveKm = Math.max(distanceKm, minKm);
     const soloTotal = (effectiveKm * rate) + car.driverAllowance;
     
-    // Apply Pool Logic: 40% Discount for riders
     if (bookingDetails?.poolType !== PoolType.SOLO) {
         return Math.round(soloTotal * 0.6);
     }
@@ -53,7 +86,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
 
     return {
       rider: riderTotal,
-      driverEarnings: Math.round(soloBase * 1.4), // 1.4x Driver Rule if full pool
+      driverEarnings: Math.round(soloBase * 1.4), 
       uber: Math.round(soloBase * 1.35),
       local: Math.round(soloBase * 1.22),
       breakdown: {
@@ -92,7 +125,6 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                 </div>
               </div>
 
-              {/* Competitive Projections */}
               <div className="bg-slate-50 rounded-3xl p-5 space-y-4 border border-slate-100 shadow-inner">
                 <div className="flex justify-between items-center">
                   <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Market Comparison</h4>
@@ -107,35 +139,18 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                     </div>
                     <span className="font-black text-slate-900">₹{totals.rider.toLocaleString()}</span>
                   </div>
-
-                  <div className="flex items-center justify-between p-3 bg-slate-100/50 rounded-2xl opacity-60">
-                    <div className="flex items-center space-x-3"><span className="w-8 h-8 bg-black rounded-lg flex items-center justify-center text-white text-[10px] font-black">U</span><span className="font-bold text-sm">Uber Intercity</span></div>
-                    <span className="font-bold line-through">₹{totals.uber.toLocaleString()}</span>
-                  </div>
                 </div>
               </div>
 
-              {/* Pool Rule Info */}
               {bookingDetails?.poolType !== PoolType.SOLO && (
                 <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-100 flex items-start space-x-3">
                     <span className="text-lg">📢</span>
                     <div>
-                        <p className="text-[10px] font-black uppercase text-slate-900">1.4x Driver Protection</p>
-                        <p className="text-[10px] text-slate-500 font-bold leading-tight">Drivers earn ₹{totals.driverEarnings.toLocaleString()} (40% more) in pool, ensuring premium service and zero cancellations.</p>
+                        <p className="text-[10px] font-black uppercase text-slate-900">Linear Overlap Matching</p>
+                        <p className="text-[10px] text-slate-500 font-bold leading-tight">We match you with riders on your direct path. If no match in 90s, we dispatch anyway or offer solo.</p>
                     </div>
                 </div>
               )}
-
-              <div className="grid grid-cols-2 gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-tight px-2">
-                <div className="flex justify-between border-b border-slate-100 pb-1">
-                  <span>Dist: {distanceKm.toFixed(1)} km</span>
-                  <span>₹{totals.breakdown.rate}/km</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-100 pb-1">
-                  <span>Allowance</span>
-                  <span>₹{totals.breakdown.allowance}</span>
-                </div>
-              </div>
 
               <button onClick={() => { onConfirm(selected); setShowModal(false); }} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest flex items-center justify-center space-x-3 transition-transform active:scale-95">
                 <span>Confirm {bookingDetails?.poolType !== PoolType.SOLO ? 'Pool' : 'Solo'} Ride</span>
@@ -192,16 +207,49 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
 
         {appState === AppState.SEARCHING_DRIVER && (
           <div className="py-10 text-center space-y-6">
-            <div className="relative w-24 h-24 mx-auto">
-              <div className="absolute inset-0 border-8 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
-              <div className="absolute inset-4 bg-slate-900 rounded-full flex items-center justify-center text-yellow-400">🛞</div>
-            </div>
-            <h2 className="text-2xl font-black text-slate-900 uppercase">
-                {bookingDetails?.poolType !== PoolType.SOLO ? 'Matching Pool...' : 'Finding Driver...'}
-            </h2>
-            <p className="text-slate-500 text-sm">
-                {bookingDetails?.poolType !== PoolType.SOLO ? 'Applying Linear Overlap Logic to find partners.' : 'Securing your fixed outstation rate.'}
-            </p>
+            {bookingDetails?.poolType !== PoolType.SOLO ? (
+              <div className="animate-in fade-in duration-500">
+                 <div className="relative w-32 h-32 mx-auto mb-8">
+                    <div className="absolute inset-0 border-[6px] border-slate-100 rounded-full"></div>
+                    <div 
+                      className="absolute inset-0 border-[6px] border-yellow-400 rounded-full transition-all duration-1000"
+                      style={{ clipPath: `inset(0 0 0 ${100 - (poolTimer/90*100)}%)` }}
+                    ></div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-2xl font-black text-slate-900 leading-none">{poolTimer}</span>
+                        <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">sec left</span>
+                    </div>
+                 </div>
+                 
+                 <div className="space-y-4">
+                    <div className="flex justify-center -space-x-3 mb-4">
+                       {[...Array(passengerCount)].map((_, i) => (
+                         <div key={i} className="w-12 h-12 rounded-full border-4 border-white bg-slate-900 flex items-center justify-center text-lg animate-in zoom-in">👤</div>
+                       ))}
+                       {[...Array(3 - passengerCount)].map((_, i) => (
+                         <div key={i} className="w-12 h-12 rounded-full border-4 border-white bg-slate-100 flex items-center justify-center text-lg text-slate-300 border-dashed">?</div>
+                       ))}
+                    </div>
+                    
+                    <h2 className="text-2xl font-black text-slate-900 uppercase">
+                        {poolStatus === PoolStatus.WAITING ? 'Scanning for Riders...' : poolStatus === PoolStatus.FILLING ? 'Co-passenger Found!' : 'Dispatching Pool...'}
+                    </h2>
+                    <p className="text-slate-500 text-sm font-medium">
+                        {passengerCount} of 3 passengers matched. <br/>
+                        Linear Overlap logic active for route efficiency.
+                    </p>
+                 </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="relative w-24 h-24 mx-auto">
+                  <div className="absolute inset-0 border-8 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="absolute inset-4 bg-slate-900 rounded-full flex items-center justify-center text-yellow-400">🛞</div>
+                </div>
+                <h2 className="text-2xl font-black text-slate-900 uppercase">Finding Driver...</h2>
+                <p className="text-slate-500 text-sm">Securing your fixed outstation rate.</p>
+              </div>
+            )}
             <button onClick={onCancel} className="w-full bg-red-50 text-red-600 font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest border border-red-100">Cancel Request</button>
           </div>
         )}

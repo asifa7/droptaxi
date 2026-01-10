@@ -4,9 +4,15 @@ import UberMap from './components/UberMap';
 import RidePanel from './components/RidePanel';
 import BookingForm from './components/BookingForm';
 import ProfileDrawer from './components/ProfileDrawer';
-import { AppState, BookingDetails, CarCategory, LatLng, UserRole, AgentProfile, PoolType } from './types';
+import { AppState, BookingDetails, CarCategory, LatLng, UserRole, AgentProfile, PoolType, PoolStatus } from './types';
 import { supabase, supabaseService, isSupabaseConfigured } from './supabaseClient';
-import { PHONE_NUMBER, BRAND_NAME, LOGO_TEXT } from './constants';
+import { PHONE_NUMBER, BRAND_NAME } from './constants';
+
+const AppLogoIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} viewBox="0 0 36 36" fill="currentColor">
+    <path d="M 32 17 h -1.051 a 12.929 12.929 0 0 0 -3.088 -7.447 l 1.159 -1.159 a 0.999 0.999 0 1 0 -1.414 -1.414 l -1.159 1.159 A 12.926 12.926 0 0 0 19 5.051 V 4 a 1 1 0 1 0 -2 0 v 1.051 a 12.932 12.932 0 0 0 -7.448 3.088 L 8.487 7.073 a 0.999 0.999 0 1 0 -1.414 1.414 l 1.066 1.066 A 12.922 12.922 0 0 0 5.051 17 H 4 a 1 1 0 1 0 0 2 h 1.051 a 12.926 12.926 0 0 0 3.088 7.447 L 6.98 27.606 a 0.999 0.999 0 1 0 1.414 1.414 l 1.159 -1.159 A 12.929 12.929 0 0 0 17 30.949 V 32 a 1 1 0 1 0 2 0 v -1.051 a 12.931 12.931 0 0 0 7.447 -3.088 l 1.066 1.066 a 0.997 0.997 0 0 0 1.414 0 a 0.999 0.999 0 0 0 0 -1.414 l -1.066 -1.066 a 12.932 12.932 0 0 0 3.088 -7.448 H 32 A 1 1 0 1 0 32 17 Z m -5.552 -6.033 A 10.943 10.943 0 0 1 28.949 17 h -6.04 a 4.96 4.96 0 0 0 -0.707 -1.788 l 4.246 -4.245 Z M 19 7.051 a 10.954 10.954 0 0 1 6.034 2.501 l -4.22 4.22 A 4.964 4.964 0 0 0 19 13.001 v -5.95 Z M 21 17.9 c 0 1.654 -1.346 3 -3 3 s -3 -1.346 -3 -3 s 1.346 -3 3 -3 s 3 1.346 3 3 Z M 17 7.051 v 5.95 a 4.964 4.964 0 0 0 -1.814 0.771 l -4.22 -4.22 A 10.95 10.95 0 0 1 17 7.051 Z m -7.448 3.916 l 4.246 4.246 a 4.96 4.96 0 0 0 -0.707 1.788 h -6.04 a 10.94 10.94 0 0 1 2.501 -6.034 Z m 0 14.067 A 10.946 10.946 0 0 1 7.051 19 h 6.08 a 4.99 4.99 0 0 0 0.741 1.714 l -4.32 4.32 Z M 17 28.949 a 10.954 10.954 0 0 1 -6.034 -2.501 l 4.345 -4.345 a 4.96 4.96 0 0 0 1.688 0.697 v 6.149 Z m 2 0 v -6.15 a 4.96 4.96 0 0 0 1.688 -0.697 l 4.345 4.346 A 10.94 10.94 0 0 1 19 28.949 Z m 7.447 -3.915 l -4.32 -4.32 a 4.95 4.95 0 0 0 0.741 -1.715 h 6.08 a 10.936 10.936 0 0 1 -2.501 6.035 Z" />
+  </svg>
+);
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
@@ -72,6 +78,8 @@ const App: React.FC = () => {
             carCategory: p.car_category,
             tripType: p.trip_type,
             poolType: (p.pool_type as PoolType) || PoolType.SOLO,
+            poolStatus: (p.pool_status as PoolStatus) || PoolStatus.IDLE,
+            poolCount: p.pool_count || 1,
             date: p.trip_date,
             time: p.trip_time,
             phone: p.phone,
@@ -106,18 +114,27 @@ const App: React.FC = () => {
                 toCoords: newRide.to_lat ? { lat: newRide.to_lat, lng: newRide.to_lng } : undefined,
                 tripType: newRide.trip_type,
                 poolType: (newRide.pool_type as PoolType) || PoolType.SOLO,
+                poolStatus: (newRide.pool_status as PoolStatus) || PoolStatus.IDLE,
+                poolCount: newRide.pool_count || 1,
                 phone: newRide.phone,
                 date: newRide.trip_date,
                 time: newRide.trip_time,
                 stops: [],
                 isForSomeoneElse: false
               } as BookingDetails), ...prev]);
-            } else if (payload.eventType === 'UPDATE' && newRide.status !== 'pending') {
-              setRidePool(prev => prev.filter(r => r.id !== newRide.id));
+            } else if (payload.eventType === 'UPDATE') {
+               if (newRide.status !== 'pending') {
+                 setRidePool(prev => prev.filter(r => r.id !== newRide.id));
+               } else {
+                 setRidePool(prev => prev.map(r => r.id === newRide.id ? { ...r, poolCount: newRide.pool_count, poolStatus: newRide.pool_status } : r));
+               }
             }
           }
 
           if (role === UserRole.USER && booking && newRide?.id === booking.id) {
+            // Update local booking state with pool updates from server
+            setBooking(prev => prev ? { ...prev, poolStatus: newRide.pool_status, poolCount: newRide.pool_count } : null);
+            
             if (newRide.status === 'accepted') {
               setAppState(AppState.TRIP_ACTIVE);
               if (newRide.from_lat && newRide.from_lng) {
@@ -147,17 +164,23 @@ const App: React.FC = () => {
   const handleMapMove = useCallback(async (coords: LatLng) => {
     if (!pinningFor) return;
     mapCenterRef.current = coords;
+    
     if (reverseAbortControllerRef.current) reverseAbortControllerRef.current.abort();
     const controller = new AbortController();
     reverseAbortControllerRef.current = controller;
 
     try {
-        const res = await fetch(`https://photon.komoot.io/reverse?lon=${coords.lng}&lat=${coords.lat}`, { signal: controller.signal });
+        const res = await fetch(`https://photon.komoot.io/reverse?lon=${coords.lng}&lat=${coords.lat}`, { 
+          signal: controller.signal 
+        });
+        if (!res.ok) throw new Error('API Error');
         const data = await res.json();
         const place = data.features[0]?.properties;
         setCurrentPinAddress(place?.name || place?.street || place?.city || "Selected Location");
     } catch (err: any) {
-        if (err.name !== 'AbortError') setCurrentPinAddress("Selected Location");
+        if (err.name !== 'AbortError') {
+          setCurrentPinAddress("Selected Location");
+        }
     }
   }, [pinningFor]);
 
@@ -179,23 +202,42 @@ const App: React.FC = () => {
   const handleConfirmRide = async (category: CarCategory) => {
     if (!booking) return;
     setAppState(AppState.SEARCHING_DRIVER);
+    
     try {
       if (!isSupabaseConfigured()) {
-        setTimeout(() => {
-          setBooking({ ...booking, id: 'demo-' + Date.now() });
-          setAppState(AppState.SEARCHING_DRIVER);
-        }, 1500);
+        const isPool = booking.poolType !== PoolType.SOLO;
+        setBooking({ ...booking, id: 'demo-' + Date.now(), poolStatus: isPool ? PoolStatus.WAITING : PoolStatus.IDLE });
         return;
       }
-      const saved = await supabaseService.createRideRequest({ 
+
+      const isPool = booking.poolType !== PoolType.SOLO;
+      let savedRide;
+
+      if (isPool && booking.fromCoords) {
+        // Step 1: Search for an active matching pool
+        const existingPool = await supabaseService.findMatchingPool(booking.fromCoords.lat, booking.fromCoords.lng, booking.poolType);
+        
+        if (existingPool) {
+          // Step 2: Join the existing pool session
+          savedRide = await supabaseService.joinPool(existingPool.id);
+        } else {
+          // Step 3: Create a new pool session as Leader
+          savedRide = await supabaseService.createRideRequest({ ...booking, carCategory: category });
+        }
+      } else {
+        // Solo Ride creation
+        savedRide = await supabaseService.createRideRequest({ ...booking, carCategory: category });
+      }
+
+      setBooking(prev => ({ 
         ...booking, 
-        carCategory: category, 
-        phone: userPhone || booking.phone 
-      });
-      setBooking({ ...booking, id: saved.id });
+        id: savedRide.id, 
+        poolStatus: savedRide.pool_status, 
+        poolCount: savedRide.pool_count 
+      }));
+      
     } catch (e: any) {
-      const errorMsg = e.message || String(e);
-      alert(`Booking Error: ${errorMsg}`);
+      alert(`Booking Error: ${e.message}`);
       setAppState(AppState.SELECTING_VEHICLE);
     }
   };
@@ -234,10 +276,11 @@ const App: React.FC = () => {
       <header className="absolute top-0 left-0 right-0 z-[1000] p-4 flex justify-center pointer-events-none">
         <div className="w-full max-w-xl flex justify-between pointer-events-auto">
           <button onClick={() => setIsProfileOpen(true)} className="glass px-4 py-2 rounded-2xl flex items-center space-x-3 border border-white shadow-xl active:scale-95 transition-all">
-            <div className="bg-slate-900 w-10 h-10 rounded-xl text-yellow-400 text-xl flex items-center justify-center shadow-inner">🛞</div>
-            <div className="flex flex-col items-start -space-y-1">
-              <span className="font-black text-slate-900 uppercase text-[10px] opacity-50">{BRAND_NAME}</span>
-              <span className="font-black text-slate-900 uppercase text-lg tracking-tighter">{LOGO_TEXT}</span>
+            <div className="bg-slate-900 w-10 h-10 rounded-xl text-yellow-400 flex items-center justify-center shadow-inner">
+               <AppLogoIcon className="w-6 h-6" />
+            </div>
+            <div className="flex flex-col items-start leading-none">
+              <span className="font-black text-slate-900 uppercase text-lg tracking-tighter">{BRAND_NAME}</span>
             </div>
           </button>
           <a href={`tel:${PHONE_NUMBER}`} className="glass w-12 h-12 rounded-2xl flex items-center justify-center text-slate-900 shadow-xl border border-white active:scale-90">
@@ -277,7 +320,12 @@ const App: React.FC = () => {
                                 <div className="space-y-1 truncate pr-4">
                                     <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{ride.tripType} - {ride.poolType.replace('_', ' ')}</p>
                                     <h4 className="font-bold text-slate-900 text-sm leading-tight truncate">{ride.from} → {ride.to}</h4>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase">📅 {ride.date} • ⏰ {ride.time}</p>
+                                    <div className="flex items-center space-x-2">
+                                      <p className="text-[10px] font-bold text-slate-400 uppercase">📅 {ride.date} • ⏰ {ride.time}</p>
+                                      {ride.poolType !== PoolType.SOLO && (
+                                        <span className="bg-yellow-100 text-yellow-600 text-[8px] px-1.5 py-0.5 rounded font-black">{ride.poolCount}/3 RIDERS</span>
+                                      )}
+                                    </div>
                                 </div>
                                 <button onClick={() => handleAcceptRide(ride)} className="bg-yellow-400 text-slate-900 px-6 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md active:scale-95 flex-shrink-0">Claim</button>
                             </div>

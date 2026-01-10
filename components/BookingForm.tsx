@@ -66,7 +66,17 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
       setIsLoadingGeo(true);
       navigator.geolocation.getCurrentPosition(async (pos) => {
         try {
-          const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`);
+          // Use a timeout for the fetch request to avoid hanging
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+          
+          const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          
+          if (!res.ok) throw new Error('Network response was not ok');
+          
           const data = await res.json();
           const place = data.features[0]?.properties;
           const name = place?.name || place?.street || place?.city || "Current Location";
@@ -75,12 +85,21 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
             from: name, 
             fromCoords: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
           }));
-        } catch (e) {
-          console.error("Reverse geocode failed", e);
+        } catch (e: any) {
+          // Fail silently to "Current Location" instead of logging "Failed to fetch" aggressively
+          console.warn("Location name lookup skipped:", e.message);
+          setDetails(prev => ({ 
+            ...prev, 
+            from: "Current Location", 
+            fromCoords: { lat: pos.coords.latitude, lng: pos.coords.longitude } 
+          }));
         } finally {
           setIsLoadingGeo(false);
         }
-      }, () => setIsLoadingGeo(false));
+      }, (err) => {
+        console.warn("Geolocation permission denied or timed out:", err.message);
+        setIsLoadingGeo(false);
+      }, { timeout: 10000 });
     }
   };
 
@@ -105,7 +124,10 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
       const controller = new AbortController();
       abortControllerRef.current = controller;
       try {
-        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lat=12.97&lon=77.59`, { signal: controller.signal });
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=5&lat=12.97&lon=77.59`, { 
+          signal: controller.signal 
+        });
+        if (!res.ok) throw new Error('API down');
         const data = await res.json();
         const results = data.features.map((f: any) => ({
           name: f.properties.name || f.properties.street || f.properties.city,
@@ -116,7 +138,10 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
         })).filter((s: any) => s.name);
         setSuggestions([{ name: 'Set location on map', isMapPin: true, lat: 0, lng: 0 }, ...results]);
       } catch (e: any) {
-        if (e.name !== 'AbortError') setSuggestions([]);
+        if (e.name !== 'AbortError') {
+          console.warn("Suggestion fetch failed silently:", e.message);
+          setSuggestions([{ name: 'Set location on map', isMapPin: true, lat: 0, lng: 0 }]);
+        }
       }
     }, 300);
   };
@@ -144,8 +169,12 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
 
   const handleInsightFetch = async () => {
     if (details.from && details.to) {
-      const res = await getTripInsights(details.from, details.to);
-      setInsight(res);
+      try {
+        const res = await getTripInsights(details.from, details.to);
+        setInsight(res);
+      } catch (e) {
+        console.warn("AI insights failed:", e);
+      }
     }
   };
 

@@ -10,7 +10,6 @@ export const COLORS = {
 
 export const PHONE_NUMBER = '7200134807';
 export const BRAND_NAME = 'Agent Taxi';
-export const LOGO_TEXT = 'Wheel';
 
 export interface CarOption {
   id: string;
