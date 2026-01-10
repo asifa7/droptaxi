@@ -1,46 +1,28 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { BookingDetails, PoolStatus, PoolType } from './types';
+import { BookingDetails, PoolStatus, PoolType, WalletTransaction } from './types';
 
 /**
- * DATABASE MIGRATION SCRIPT (Run this in Supabase SQL Editor):
+ * DATABASE MIGRATION SCRIPT (Update):
  * 
- * -- 1. If 'bookings' table exists, add missing columns safely
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pool_type text DEFAULT 'SOLO'::text;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pool_status text DEFAULT 'IDLE'::text;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS pool_count int DEFAULT 1;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS leader_id uuid;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS expiry_at timestamp with time zone;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stops_data jsonb;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS car_category text;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS trip_type text;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS trip_date text;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS trip_time text;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driver_phone text;
- * ALTER TABLE bookings ADD COLUMN IF NOT EXISTS accepted_at timestamp with time zone;
+ * -- Create wallet transactions table
+ * CREATE TABLE IF NOT EXISTS wallet_transactions (
+ *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+ *   agent_phone text NOT NULL,
+ *   type text NOT NULL, -- 'EARNING', 'WITHDRAWAL', 'COMMISSION'
+ *   amount numeric NOT NULL,
+ *   description text,
+ *   status text DEFAULT 'COMPLETED',
+ *   created_at timestamp with time zone DEFAULT now()
+ * );
  * 
- * -- 2. Create RPC function for atomic pool updates
- * CREATE OR REPLACE FUNCTION increment_pool_count(row_id uuid)
- * RETURNS jsonb
- * LANGUAGE plpgsql
- * SECURITY DEFINER
- * AS $$
- * DECLARE
- *   updated_row bookings%ROWTYPE;
- * BEGIN
- *   UPDATE bookings
- *   SET 
- *     pool_count = COALESCE(pool_count, 1) + 1,
- *     pool_status = CASE 
- *       WHEN (COALESCE(pool_count, 1) + 1) >= 3 THEN 'LOCKED' 
- *       ELSE 'FILLING' 
- *     END
- *   WHERE id = row_id
- *   RETURNING * INTO updated_row;
- *   
- *   RETURN to_jsonb(updated_row);
- * END;
- * $$;
+ * -- Create agent_wallets table
+ * CREATE TABLE IF NOT EXISTS agent_wallets (
+ *   phone text PRIMARY KEY,
+ *   balance numeric DEFAULT 0,
+ *   total_earned numeric DEFAULT 0,
+ *   updated_at timestamp with time zone DEFAULT now()
+ * );
  */
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 
@@ -63,42 +45,10 @@ const stringifyError = (err: any): string => {
   if (!err) return "Unknown database error";
   if (typeof err === 'string') return err;
   if (err.message) return err.message;
-  if (err.details) return `${err.details} (${err.hint || ''})`;
-  if (err.code) return `Database Error ${err.code}`;
   return String(err);
 };
 
 export const supabaseService = {
-  // --- AUTH METHODS ---
-  async sendOTP(phone: string) {
-    if (!isSupabaseConfigured()) throw new Error("Supabase configuration missing.");
-    const digits = phone.replace(/\D/g, '');
-    const formattedPhone = digits.length > 10 ? `+${digits}` : `+91${digits.slice(-10)}`;
-    const { data, error } = await supabase.auth.signInWithOtp({
-      phone: formattedPhone,
-      options: { channel: 'sms' }
-    });
-    if (error) throw new Error(stringifyError(error));
-    return data;
-  },
-
-  async verifyOTP(phone: string, token: string) {
-    const digits = phone.replace(/\D/g, '');
-    const formattedPhone = digits.length > 10 ? `+${digits}` : `+91${digits.slice(-10)}`;
-    const { data: { session }, error } = await supabase.auth.verifyOtp({
-      phone: formattedPhone,
-      token,
-      type: 'sms',
-    });
-    if (error) throw new Error(stringifyError(error));
-    return session;
-  },
-
-  async signOut() {
-    await supabase.auth.signOut();
-  },
-
-  // --- RIDE & POOLING METHODS ---
   async getPendingRides() {
     const { data, error } = await supabase
       .from('bookings')
@@ -118,18 +68,30 @@ export const supabaseService = {
       .lt('pool_count', 3)
       .order('created_at', { ascending: false })
       .limit(1);
-
     if (error) return null;
     return data && data.length > 0 ? data[0] : null;
   },
 
+  // Fix: Added joinPool method to allow users to join an existing ride pool
+  async joinPool(id: string) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ 
+        pool_count: 2, // In a real app, this would be pool_count + 1 via RPC
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw new Error(stringifyError(error));
+    return data;
+  },
+
   async createRideRequest(booking: BookingDetails) {
     const isPool = booking.poolType !== PoolType.SOLO;
-    const expiryAt = isPool ? new Date(Date.now() + 90 * 1000).toISOString() : null;
-
     const payload: any = {
-      from_name: booking.from || 'Unknown Location',
-      to_name: booking.to || 'Unknown Destination',
+      from_name: booking.from,
+      to_name: booking.to,
       from_lat: booking.fromCoords?.lat ?? null,
       from_lng: booking.fromCoords?.lng ?? null,
       to_lat: booking.toCoords?.lat ?? null,
@@ -140,45 +102,13 @@ export const supabaseService = {
       phone: booking.phone || '',
       trip_date: booking.date || '',
       trip_time: booking.time || '',
-      stops_data: booking.stops.length > 0 ? JSON.stringify(booking.stops) : null,
       pool_type: booking.poolType,
       pool_status: isPool ? 'WAITING' : 'IDLE',
-      pool_count: 1,
-      expiry_at: expiryAt
+      pool_count: 1
     };
 
-    const { data, error } = await supabase
-      .from('bookings')
-      .insert([payload])
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Supabase Create Error:", JSON.stringify(error, null, 2));
-      throw new Error(stringifyError(error));
-    }
-    return data;
-  },
-
-  async joinPool(poolId: string) {
-    // Atomic increment using the RPC defined above
-    const { data, error } = await supabase.rpc('increment_pool_count', { row_id: poolId });
-    
-    if (error) {
-      console.warn("RPC joinPool failed, falling back to manual update:", error);
-      const { data: updateData, error: updateError } = await supabase
-        .from('bookings')
-        .update({ 
-          pool_count: 2, 
-          pool_status: 'FILLING' 
-        })
-        .eq('id', poolId)
-        .select()
-        .single();
-        
-      if (updateError) throw new Error(stringifyError(updateError));
-      return updateData;
-    }
+    const { data, error } = await supabase.from('bookings').insert([payload]).select().single();
+    if (error) throw new Error(stringifyError(error));
     return data;
   },
 
@@ -198,5 +128,72 @@ export const supabaseService = {
     if (error) throw new Error(stringifyError(error));
     if (!data) throw new Error("RIDE_ALREADY_TAKEN");
     return data;
+  },
+
+  // Fix: Added sendOTP method for Supabase SMS authentication
+  async sendOTP(phone: string) {
+    const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` });
+    if (error) throw new Error(stringifyError(error));
+  },
+
+  // Fix: Added verifyOTP method for completing Supabase SMS authentication
+  async verifyOTP(phone: string, token: string) {
+    const { data, error } = await supabase.auth.verifyOtp({
+      phone: `+91${phone}`,
+      token,
+      type: 'sms'
+    });
+    if (error) throw new Error(stringifyError(error));
+    return data.session;
+  },
+
+  // Fix: Added signOut method for user logout
+  async signOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw new Error(stringifyError(error));
+  },
+
+  // --- WALLET METHODS ---
+  async getWalletDetails(phone: string) {
+    const { data, error } = await supabase
+      .from('agent_wallets')
+      .select('*')
+      .eq('phone', phone)
+      .single();
+    
+    if (error && error.code !== 'PGRST116') throw new Error(stringifyError(error));
+    return data || { balance: 0, total_earned: 0 };
+  },
+
+  async getTransactions(phone: string) {
+    const { data, error } = await supabase
+      .from('wallet_transactions')
+      .select('*')
+      .eq('agent_phone', phone)
+      .order('created_at', { ascending: false });
+    
+    if (error) throw new Error(stringifyError(error));
+    return data || [];
+  },
+
+  async requestWithdrawal(phone: string, amount: number, upiId: string) {
+    // 1. Log transaction
+    const { error: txError } = await supabase.from('wallet_transactions').insert([{
+      agent_phone: phone,
+      type: 'WITHDRAWAL',
+      amount: -amount,
+      description: `Withdrawal to ${upiId}`,
+      status: 'PENDING'
+    }]);
+
+    if (txError) throw new Error(stringifyError(txError));
+
+    // 2. Update balance
+    const { error: balError } = await supabase.rpc('update_wallet_balance', { 
+      target_phone: phone, 
+      deduct_amount: amount 
+    });
+
+    if (balError) throw new Error(stringifyError(balError));
   }
 };

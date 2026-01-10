@@ -9,9 +9,10 @@ interface RidePanelProps {
   onConfirm: (category: CarCategory) => void;
   onCancel: () => void;
   bookingDetails?: BookingDetails;
+  onPay?: () => void;
 }
 
-const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bookingDetails }) => {
+const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bookingDetails, onPay }) => {
   const [selected, setSelected] = useState<CarCategory>(CarCategory.SEDAN);
   const [showModal, setShowModal] = useState(false);
   const [modalCar, setModalCar] = useState<CarOption | null>(null);
@@ -47,7 +48,6 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
             clearInterval(interval);
             return 0;
           }
-          // Random match simulation logic
           if (prev === 75) {
             setPassengerCount(2);
             setPoolStatus(PoolStatus.FILLING);
@@ -160,7 +160,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
         </div>
       )}
 
-      <div className={`fixed bottom-0 left-0 right-0 z-20 glass rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] p-6 bottom-sheet transform ${appState === AppState.IDLE || appState === AppState.DRIVER_LISTING ? 'translate-y-full' : 'translate-y-0'}`}>
+      <div className={`fixed bottom-0 left-0 right-0 z-20 glass rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] p-6 bottom-sheet transform ${appState === AppState.IDLE || appState === AppState.DRIVER_LISTING || appState === AppState.PAYMENT ? 'translate-y-full' : 'translate-y-0'}`}>
         <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
         
         {appState === AppState.SELECTING_VEHICLE && (
@@ -264,10 +264,14 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                     <p className="text-xs font-bold text-slate-400">Locked Price: ₹{totals.rider.toLocaleString()}</p>
                   </div>
                 </div>
+                <div className="text-right">
+                   <p className="text-xl font-black text-slate-900">₹{totals.rider.toLocaleString()}</p>
+                   <p className="text-[10px] font-black uppercase text-slate-400">Fixed Fare</p>
+                </div>
              </div>
              <div className="grid grid-cols-2 gap-4">
-               <a href={`tel:${PHONE_NUMBER}`} className="bg-slate-100 py-4 rounded-2xl font-black text-xs uppercase text-slate-900 flex items-center justify-center">Contact Driver</a>
-               <button className="bg-yellow-400 py-4 rounded-2xl font-black text-xs uppercase text-slate-900">Share Status</button>
+               <button onClick={onPay} className="bg-yellow-400 py-4 rounded-2xl font-black text-xs uppercase text-slate-900 shadow-xl shadow-yellow-400/20 active:scale-95 transition-all">Pay Now via UPI</button>
+               <a href={`tel:${PHONE_NUMBER}`} className="bg-slate-100 py-4 rounded-2xl font-black text-xs uppercase text-slate-900 flex items-center justify-center active:scale-95 transition-all">Contact Driver</a>
              </div>
           </div>
         )}

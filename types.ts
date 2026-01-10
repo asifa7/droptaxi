@@ -31,7 +31,9 @@ export enum AppState {
   SEARCHING_DRIVER = 'SEARCHING_DRIVER',
   TRIP_ACTIVE = 'TRIP_ACTIVE',
   ARRIVED = 'ARRIVED',
-  DRIVER_LISTING = 'DRIVER_LISTING'
+  DRIVER_LISTING = 'DRIVER_LISTING',
+  PAYMENT = 'PAYMENT',
+  WALLET = 'WALLET'
 }
 
 export enum CarCategory {
@@ -52,12 +54,24 @@ export interface StopLocation {
   coords?: LatLng;
 }
 
+export interface WalletTransaction {
+  id: string;
+  type: 'EARNING' | 'WITHDRAWAL' | 'COMMISSION';
+  amount: number;
+  description: string;
+  status: 'PENDING' | 'COMPLETED' | 'FAILED';
+  createdAt: string;
+}
+
 export interface AgentProfile {
   name: string;
   phone: string;
   vehicleNumber: string;
   vehicleModel: string;
   isVerified: boolean;
+  balance: number;
+  totalEarnings: number;
+  transactions: WalletTransaction[];
 }
 
 export interface BookingDetails {
@@ -80,6 +94,7 @@ export interface BookingDetails {
   isForSomeoneElse: boolean;
   carCategory: CarCategory;
   status?: 'pending' | 'accepted' | 'completed';
+  fareAmount?: number;
 }
 
 export interface RouteInsight {

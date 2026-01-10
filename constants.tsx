@@ -6,10 +6,15 @@ export const COLORS = {
   secondary: '#1e293b', // Slate-800
   accent: '#2563eb', // Blue-600
   tariffBg: '#f8fafc', // Clean light background
+  success: '#22c55e', // Green-500
 };
 
 export const PHONE_NUMBER = '7200134807';
 export const BRAND_NAME = 'Agent Taxi';
+export const COMPANY_VPA = '7200134807@ybl'; 
+
+// AGENT WALLET CONFIG
+export const COMMISSION_RATE = 0.10; // 10% Platform Fee
 
 export interface CarOption {
   id: string;

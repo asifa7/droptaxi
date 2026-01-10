@@ -4,9 +4,11 @@ import UberMap from './components/UberMap';
 import RidePanel from './components/RidePanel';
 import BookingForm from './components/BookingForm';
 import ProfileDrawer from './components/ProfileDrawer';
-import { AppState, BookingDetails, CarCategory, LatLng, UserRole, AgentProfile, PoolType, PoolStatus } from './types';
+import PaymentGateway from './components/PaymentGateway';
+import AgentWallet from './components/AgentWallet';
+import { AppState, BookingDetails, CarCategory, LatLng, UserRole, AgentProfile, PoolType, PoolStatus, WalletTransaction } from './types';
 import { supabase, supabaseService, isSupabaseConfigured } from './supabaseClient';
-import { PHONE_NUMBER, BRAND_NAME } from './constants';
+import { PHONE_NUMBER, BRAND_NAME, COMMISSION_RATE } from './constants';
 
 const AppLogoIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} viewBox="0 0 36 36" fill="currentColor">
@@ -36,6 +38,35 @@ const App: React.FC = () => {
   const [currentPinAddress, setCurrentPinAddress] = useState<string>('Moving map...');
   const mapCenterRef = useRef<LatLng>({ lat: 12.9716, lng: 77.5946 });
   const reverseAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Load Wallet Data for Agent
+  useEffect(() => {
+    if (role === UserRole.DRIVER && (userPhone || agentProfile?.phone)) {
+      const phone = agentProfile?.phone || userPhone!;
+      const loadWallet = async () => {
+        try {
+          const wallet = await supabaseService.getWalletDetails(phone);
+          const txs = await supabaseService.getTransactions(phone);
+          setAgentProfile(prev => prev ? {
+            ...prev,
+            balance: wallet.balance,
+            totalEarnings: wallet.total_earned,
+            transactions: txs.map((t: any) => ({
+              id: t.id,
+              type: t.type,
+              amount: t.amount,
+              description: t.description,
+              status: t.status,
+              createdAt: t.created_at
+            }))
+          } : null);
+        } catch (e) {
+          console.warn("Wallet load failed:", e);
+        }
+      };
+      loadWallet();
+    }
+  }, [role, userPhone, appState]);
 
   // AUTH STATE MANAGEMENT
   useEffect(() => {
@@ -132,7 +163,6 @@ const App: React.FC = () => {
           }
 
           if (role === UserRole.USER && booking && newRide?.id === booking.id) {
-            // Update local booking state with pool updates from server
             setBooking(prev => prev ? { ...prev, poolStatus: newRide.pool_status, poolCount: newRide.pool_count } : null);
             
             if (newRide.status === 'accepted') {
@@ -214,18 +244,13 @@ const App: React.FC = () => {
       let savedRide;
 
       if (isPool && booking.fromCoords) {
-        // Step 1: Search for an active matching pool
         const existingPool = await supabaseService.findMatchingPool(booking.fromCoords.lat, booking.fromCoords.lng, booking.poolType);
-        
         if (existingPool) {
-          // Step 2: Join the existing pool session
           savedRide = await supabaseService.joinPool(existingPool.id);
         } else {
-          // Step 3: Create a new pool session as Leader
           savedRide = await supabaseService.createRideRequest({ ...booking, carCategory: category });
         }
       } else {
-        // Solo Ride creation
         savedRide = await supabaseService.createRideRequest({ ...booking, carCategory: category });
       }
 
@@ -262,15 +287,66 @@ const App: React.FC = () => {
     setIsProfileOpen(false);
   };
 
+  const handlePaymentSuccess = () => {
+    setAppState(AppState.IDLE);
+    setBooking(null);
+    alert("Payment confirmed! Your booking is complete.");
+  };
+
+  const handleTriggerPayment = () => {
+    setAppState(AppState.PAYMENT);
+  };
+
+  const handleWithdrawalRequest = async (amount: number, upiId: string) => {
+    const phone = agentProfile?.phone || userPhone;
+    if (!phone) return;
+    try {
+      await supabaseService.requestWithdrawal(phone, amount, upiId);
+      alert("Withdrawal request submitted! Payout will reflect in 24-48 hours.");
+      setAppState(AppState.IDLE);
+    } catch (e) {
+      alert("Withdrawal failed. Please check your connection.");
+    }
+  };
+
   return (
     <div className="h-[100dvh] w-full relative overflow-hidden bg-slate-100 select-none">
       <UberMap pickup={userLoc} destination={dropLoc} driverLoc={driverLoc} appState={appState} onMapMove={handleMapMove} center={pinningFor ? mapCenterRef.current : undefined} />
-      <ProfileDrawer isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} isLoggedIn={isLoggedIn} userPhone={userPhone} onToggleLogin={() => setIsLoggedIn(true)} currentRole={role} onToggleRole={toggleRole} agentProfile={agentProfile} onUpdateAgent={(p) => setAgentProfile(p)} />
+      
+      <ProfileDrawer 
+        isOpen={isProfileOpen} 
+        onClose={() => setIsProfileOpen(false)} 
+        isLoggedIn={isLoggedIn} 
+        userPhone={userPhone} 
+        onToggleLogin={() => setIsLoggedIn(true)} 
+        currentRole={role} 
+        onToggleRole={toggleRole} 
+        agentProfile={agentProfile} 
+        onUpdateAgent={(p) => setAgentProfile(p)}
+        onOpenWallet={() => { setAppState(AppState.WALLET); setIsProfileOpen(false); }}
+      />
       
       {pinningFor && (
         <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-[1100]">
           <div className="w-10 h-10 bg-slate-900 rounded-full border-4 border-white shadow-2xl animate-bounce mb-10 transform -translate-y-1/2"></div>
         </div>
+      )}
+
+      {appState === AppState.PAYMENT && booking && (
+        <PaymentGateway 
+          amount={100} 
+          bookingId={booking.id || 'DEMO'}
+          onSuccess={handlePaymentSuccess}
+          onCancel={() => setAppState(AppState.TRIP_ACTIVE)}
+        />
+      )}
+
+      {appState === AppState.WALLET && agentProfile && (
+        <AgentWallet 
+          profile={agentProfile} 
+          onWithdraw={handleWithdrawalRequest} 
+          onClose={() => setAppState(AppState.IDLE)} 
+        />
       )}
 
       <header className="absolute top-0 left-0 right-0 z-[1000] p-4 flex justify-center pointer-events-none">
@@ -336,7 +412,13 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <RidePanel appState={appState} onConfirm={handleConfirmRide} onCancel={() => { setAppState(AppState.IDLE); setBooking(null); }} bookingDetails={booking || undefined} />
+      <RidePanel 
+        appState={appState} 
+        onConfirm={handleConfirmRide} 
+        onCancel={() => { setAppState(AppState.IDLE); setBooking(null); }} 
+        bookingDetails={booking || undefined}
+        onPay={handleTriggerPayment}
+      />
     </div>
   );
 };
