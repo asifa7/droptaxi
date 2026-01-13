@@ -11,7 +11,8 @@
     <style>
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            overflow: hidden; /* Prevent body scroll, use custom containers */
+            overflow: hidden; 
+            background-color: #f1f5f9;
         }
         .bottom-sheet {
             transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -24,7 +25,6 @@
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Map styling adjustments */
         #map { background: #f8fafc; }
         .leaflet-control-attribution { display: none !important; }
         .leaflet-container { font-family: inherit; }
@@ -46,6 +46,21 @@
             animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
             left: -20px;
             top: -20px;
+        }
+
+        /* Improved Landscape & Compact UI Tweaks */
+        @media (max-height: 600px) {
+            #booking-container {
+                padding-bottom: 0.5rem !important;
+                padding-top: 4rem !important; /* Leave room for header */
+            }
+            .booking-card {
+                max-height: 70vh !important;
+            }
+            .booking-card form {
+                padding: 1rem !important;
+                gap: 0.75rem !important;
+            }
         }
     </style>
 <script type="importmap">

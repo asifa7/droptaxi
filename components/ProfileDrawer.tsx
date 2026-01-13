@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { UserRole, AgentProfile } from '../types';
 import { BRAND_NAME } from '../constants';
@@ -101,6 +100,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
 
   const handleAgentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Fix: Added missing commissionDue and commissionPaid properties to satisfy AgentProfile interface
     onUpdateAgent({
       name: formData.name,
       phone: formData.phone,
@@ -109,6 +109,8 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
       isVerified: false,
       balance: 0,
       totalEarnings: 0,
+      commissionDue: 0,
+      commissionPaid: 0,
       transactions: []
     });
     setIsRegisteringAgent(false);

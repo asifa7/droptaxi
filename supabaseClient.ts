@@ -1,28 +1,39 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { BookingDetails, PoolStatus, PoolType, WalletTransaction } from './types';
+import { BookingDetails, PoolStatus, PoolType, RatingData } from './types';
 
 /**
  * DATABASE MIGRATION SCRIPT (Update):
  * 
- * -- Create wallet transactions table
- * CREATE TABLE IF NOT EXISTS wallet_transactions (
- *   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
- *   agent_phone text NOT NULL,
- *   type text NOT NULL, -- 'EARNING', 'WITHDRAWAL', 'COMMISSION'
- *   amount numeric NOT NULL,
- *   description text,
- *   status text DEFAULT 'COMPLETED',
+ * -- Create payment verifications table
+ * CREATE TABLE IF NOT EXISTS payment_verifications (
+ *   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   booking_id uuid REFERENCES bookings(id),
+ *   passenger_confirmed boolean DEFAULT false,
+ *   driver_confirmed boolean DEFAULT false,
+ *   passenger_confirmation_time timestamp with time zone,
+ *   driver_confirmation_time timestamp with time zone,
+ *   transaction_reference text,
+ *   amount numeric,
+ *   status text DEFAULT 'PENDING',
  *   created_at timestamp with time zone DEFAULT now()
  * );
  * 
- * -- Create agent_wallets table
- * CREATE TABLE IF NOT EXISTS agent_wallets (
- *   phone text PRIMARY KEY,
- *   balance numeric DEFAULT 0,
- *   total_earned numeric DEFAULT 0,
- *   updated_at timestamp with time zone DEFAULT now()
+ * -- Create ratings table
+ * CREATE TABLE IF NOT EXISTS ratings (
+ *   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ *   booking_id uuid REFERENCES bookings(id),
+ *   rated_by text, -- 'USER' or 'DRIVER'
+ *   rated_user_id text,
+ *   stars integer CHECK (stars >= 1 AND stars <= 5),
+ *   tags text[],
+ *   comment text,
+ *   created_at timestamp with time zone DEFAULT now()
  * );
+ * 
+ * -- Update agent_wallets table
+ * ALTER TABLE agent_wallets ADD COLUMN IF NOT EXISTS commission_due numeric DEFAULT 0;
+ * ALTER TABLE agent_wallets ADD COLUMN IF NOT EXISTS commission_paid numeric DEFAULT 0;
  */
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || 
@@ -72,12 +83,11 @@ export const supabaseService = {
     return data && data.length > 0 ? data[0] : null;
   },
 
-  // Fix: Added joinPool method to allow users to join an existing ride pool
   async joinPool(id: string) {
     const { data, error } = await supabase
       .from('bookings')
       .update({ 
-        pool_count: 2, // In a real app, this would be pool_count + 1 via RPC
+        pool_count: 2, 
         updated_at: new Date().toISOString()
       })
       .eq('id', id)
@@ -104,7 +114,8 @@ export const supabaseService = {
       trip_time: booking.time || '',
       pool_type: booking.poolType,
       pool_status: isPool ? 'WAITING' : 'IDLE',
-      pool_count: 1
+      pool_count: 1,
+      fare_amount: booking.fareAmount || 0
     };
 
     const { data, error } = await supabase.from('bookings').insert([payload]).select().single();
@@ -130,13 +141,11 @@ export const supabaseService = {
     return data;
   },
 
-  // Fix: Added sendOTP method for Supabase SMS authentication
   async sendOTP(phone: string) {
     const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` });
     if (error) throw new Error(stringifyError(error));
   },
 
-  // Fix: Added verifyOTP method for completing Supabase SMS authentication
   async verifyOTP(phone: string, token: string) {
     const { data, error } = await supabase.auth.verifyOtp({
       phone: `+91${phone}`,
@@ -147,9 +156,72 @@ export const supabaseService = {
     return data.session;
   },
 
-  // Fix: Added signOut method for user logout
   async signOut() {
     const { error } = await supabase.auth.signOut();
+    if (error) throw new Error(stringifyError(error));
+  },
+
+  // --- PAYMENT VERIFICATION ---
+  async initiatePaymentVerification(bookingId: string, amount: number) {
+    const { error } = await supabase.from('payment_verifications').insert([{
+      booking_id: bookingId,
+      amount: amount,
+      status: 'PENDING'
+    }]);
+    if (error) throw new Error(stringifyError(error));
+  },
+
+  async confirmPayment(bookingId: string, role: 'USER' | 'DRIVER', txRef?: string) {
+    const update: any = role === 'USER' 
+      ? { passenger_confirmed: true, passenger_confirmation_time: new Date().toISOString(), transaction_reference: txRef }
+      : { driver_confirmed: true, driver_confirmation_time: new Date().toISOString() };
+
+    const { data, error } = await supabase
+      .from('payment_verifications')
+      .update(update)
+      .eq('booking_id', bookingId)
+      .select()
+      .single();
+
+    if (error) throw new Error(stringifyError(error));
+
+    if (data.passenger_confirmed && data.driver_confirmed) {
+       await this.finalizePayment(bookingId);
+       return 'VERIFIED';
+    }
+    return 'WAITING_OTHER';
+  },
+
+  async finalizePayment(bookingId: string) {
+     const { data: booking } = await supabase.from('bookings').select('*').eq('id', bookingId).single();
+     if (!booking) return;
+
+     const commission = booking.fare_amount * 0.10;
+
+     // Record commission as liability
+     await supabase.from('wallet_transactions').insert({
+       agent_phone: booking.driver_phone,
+       type: 'COMMISSION',
+       amount: -commission,
+       description: `Commission for Trip ${bookingId}`,
+       status: 'PENDING'
+     });
+
+     // Update booking status
+     await supabase.from('bookings').update({ status: 'completed' }).eq('id', bookingId);
+     await supabase.from('payment_verifications').update({ status: 'COMPLETED' }).eq('booking_id', bookingId);
+  },
+
+  // --- RATINGS ---
+  async submitRating(rating: RatingData) {
+    const { error } = await supabase.from('ratings').insert([{
+      booking_id: rating.bookingId,
+      rated_by: rating.ratedBy,
+      rated_user_id: rating.ratedUserId,
+      stars: rating.stars,
+      tags: rating.tags,
+      comment: rating.comment
+    }]);
     if (error) throw new Error(stringifyError(error));
   },
 
@@ -162,7 +234,7 @@ export const supabaseService = {
       .single();
     
     if (error && error.code !== 'PGRST116') throw new Error(stringifyError(error));
-    return data || { balance: 0, total_earned: 0 };
+    return data || { balance: 0, total_earned: 0, commission_due: 0, commission_paid: 0 };
   },
 
   async getTransactions(phone: string) {
@@ -188,10 +260,10 @@ export const supabaseService = {
 
     if (txError) throw new Error(stringifyError(txError));
 
-    // 2. Update balance
-    const { error: balError } = await supabase.rpc('update_wallet_balance', { 
+    // 2. Update balance via RPC
+    const { error: balError } = await supabase.rpc('process_agent_withdrawal', { 
       target_phone: phone, 
-      deduct_amount: amount 
+      requested_amount: amount 
     });
 
     if (balError) throw new Error(stringifyError(balError));

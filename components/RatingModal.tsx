@@ -1,0 +1,106 @@
+
+import React, { useState } from 'react';
+import { UserRole, BookingDetails } from '../types';
+
+interface RatingModalProps {
+  booking: BookingDetails;
+  userRole: UserRole;
+  onSubmit: (stars: number, tags: string[], comment: string) => void;
+  onClose: () => void;
+}
+
+const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, onClose }) => {
+  const [rating, setRating] = useState(5);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [comment, setComment] = useState('');
+
+  const driverTags = [
+    "🕐 Punctual",
+    "🚗 Clean Vehicle",
+    "😊 Friendly",
+    "🛣️ Safe Driver",
+    "💬 Good Communication"
+  ];
+
+  const passengerTags = [
+    "🕐 On Time",
+    "😊 Polite",
+    "💳 Payment Smooth",
+    "📍 Clear Directions"
+  ];
+
+  const toggleTag = (tag: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[8000] flex items-center justify-center p-6 animate-in fade-in duration-300">
+      <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl" onClick={onClose}></div>
+      
+      <div className="relative w-full max-w-lg bg-white rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 duration-500 overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+        
+        <div className="text-center space-y-4 mb-10">
+          <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">
+            Rate your {userRole === UserRole.USER ? 'Driver' : 'Passenger'}
+          </p>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">
+            How was the trip?
+          </h2>
+        </div>
+
+        {/* Star Selection */}
+        <div className="flex justify-center space-x-3 mb-10">
+          {[1, 2, 3, 4, 5].map(star => (
+            <button
+              key={star}
+              onClick={() => setRating(star)}
+              className={`text-5xl transition-all hover:scale-125 active:scale-90 ${
+                star <= rating ? 'text-yellow-400 drop-shadow-lg' : 'text-slate-100'
+              }`}
+            >
+              ★
+            </button>
+          ))}
+        </div>
+
+        {/* Tag Selection */}
+        <div className="grid grid-cols-2 gap-3 mb-8">
+          {(userRole === UserRole.USER ? driverTags : passengerTags).map(tag => (
+            <button
+              key={tag}
+              onClick={() => toggleTag(tag)}
+              className={`p-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all border-2 ${
+                selectedTags.includes(tag)
+                  ? 'bg-yellow-400 border-yellow-400 text-slate-900 shadow-lg'
+                  : 'bg-slate-50 border-slate-50 text-slate-500 hover:border-slate-200'
+              }`}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+
+        <div className="space-y-4">
+          <textarea
+            placeholder="Any specific feedback? (Optional)"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            className="w-full p-6 rounded-[2rem] bg-slate-50 border-none font-bold text-slate-800 text-sm shadow-inner min-h-[100px] outline-none focus:ring-2 focus:ring-yellow-400 transition-all"
+          />
+
+          <button 
+            onClick={() => onSubmit(rating, selectedTags, comment)} 
+            className="w-full bg-slate-900 text-white font-black py-5 rounded-[2rem] shadow-xl uppercase tracking-widest text-xs active:scale-95 transition-all mt-4"
+          >
+            Submit Feedback
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default RatingModal;

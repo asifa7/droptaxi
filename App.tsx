@@ -6,9 +6,12 @@ import BookingForm from './components/BookingForm';
 import ProfileDrawer from './components/ProfileDrawer';
 import PaymentGateway from './components/PaymentGateway';
 import AgentWallet from './components/AgentWallet';
-import { AppState, BookingDetails, CarCategory, LatLng, UserRole, AgentProfile, PoolType, PoolStatus, WalletTransaction } from './types';
+import DriverTripCard from './components/DriverTripCard';
+import RatingModal from './components/RatingModal';
+import { AppState, BookingDetails, CarCategory, LatLng, UserRole, AgentProfile, PoolType, PoolStatus, WalletTransaction, TripType } from './types';
 import { supabase, supabaseService, isSupabaseConfigured } from './supabaseClient';
 import { PHONE_NUMBER, BRAND_NAME, COMMISSION_RATE } from './constants';
+import { poolMatcher } from './services/poolMatcher';
 
 const AppLogoIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} viewBox="0 0 36 36" fill="currentColor">
@@ -51,6 +54,8 @@ const App: React.FC = () => {
             ...prev,
             balance: wallet.balance,
             totalEarnings: wallet.total_earned,
+            commissionDue: wallet.commission_due || 0,
+            commissionPaid: wallet.commission_paid || 0,
             transactions: txs.map((t: any) => ({
               id: t.id,
               type: t.type,
@@ -93,30 +98,48 @@ const App: React.FC = () => {
     return () => subscription.unsubscribe();
   }, []);
 
-  // POOL AND REALTIME UPDATES
+  const enhanceTripData = (rawTrip: any): BookingDetails => {
+    const pickupCoords = rawTrip.from_lat ? { lat: rawTrip.from_lat, lng: rawTrip.from_lng } : undefined;
+    let pickupDist = 0.5;
+    if (pickupCoords && userLoc) {
+        const dx = pickupCoords.lat - userLoc.lat;
+        const dy = pickupCoords.lng - userLoc.lng;
+        pickupDist = Math.sqrt(dx*dx + dy*dy) * 111; 
+    }
+
+    return {
+      id: rawTrip.id,
+      from: rawTrip.from_name,
+      to: rawTrip.to_name,
+      fromCoords: pickupCoords,
+      toCoords: rawTrip.to_lat ? { lat: rawTrip.to_lat, lng: rawTrip.to_lng } : undefined,
+      status: rawTrip.status,
+      carCategory: rawTrip.car_category as CarCategory,
+      tripType: rawTrip.trip_type as TripType,
+      poolType: (rawTrip.pool_type as PoolType) || PoolType.SOLO,
+      poolStatus: (rawTrip.pool_status as PoolStatus) || PoolStatus.IDLE,
+      poolCount: rawTrip.pool_count || 1,
+      date: rawTrip.trip_date,
+      time: rawTrip.trip_time,
+      phone: rawTrip.phone,
+      stops: [],
+      isForSomeoneElse: false,
+      pickupDistance: pickupDist,
+      estimatedPickupTime: Math.ceil(pickupDist * 3), 
+      routePreview: rawTrip.to_name.includes('Bangalore') ? "NH-44 → Hosur Road → Electronics City" : "State Highway → Outer Ring Road",
+      landmarks: rawTrip.from_name.includes('Airport') ? ["Near Terminal 1", "Taxi Stand B"] : ["Near Main Circle", "Opposite Mall"],
+      distanceKm: rawTrip.distance_km || 150,
+      returnViability: Math.random() > 0.4,
+      fareAmount: rawTrip.fare_amount || (rawTrip.pool_type !== PoolType.SOLO ? 850 : 2400)
+    };
+  };
+
   useEffect(() => {
     const fetchInitialData = async () => {
       if (role === UserRole.DRIVER && isSupabaseConfigured()) {
         try {
           const pending = await supabaseService.getPendingRides();
-          const mapped: BookingDetails[] = pending.map((p: any) => ({
-            id: p.id,
-            from: p.from_name,
-            to: p.to_name,
-            fromCoords: p.from_lat ? { lat: p.from_lat, lng: p.from_lng } : undefined,
-            toCoords: p.to_lat ? { lat: p.to_lat, lng: p.to_lng } : undefined,
-            status: p.status,
-            carCategory: p.car_category,
-            tripType: p.trip_type,
-            poolType: (p.pool_type as PoolType) || PoolType.SOLO,
-            poolStatus: (p.pool_status as PoolStatus) || PoolStatus.IDLE,
-            poolCount: p.pool_count || 1,
-            date: p.trip_date,
-            time: p.trip_time,
-            phone: p.phone,
-            stops: [],
-            isForSomeoneElse: false
-          }));
+          const mapped = pending.map(enhanceTripData);
           setRidePool(mapped);
         } catch (err) {
           console.error("Error fetching pool:", err);
@@ -137,35 +160,20 @@ const App: React.FC = () => {
           const newRide: any = payload.new;
           if (role === UserRole.DRIVER) {
             if (payload.eventType === 'INSERT' && newRide.status === 'pending') {
-              setRidePool(prev => [({
-                id: newRide.id,
-                from: newRide.from_name,
-                to: newRide.to_name,
-                fromCoords: newRide.from_lat ? { lat: newRide.from_lat, lng: newRide.from_lng } : undefined,
-                toCoords: newRide.to_lat ? { lat: newRide.to_lat, lng: newRide.to_lng } : undefined,
-                tripType: newRide.trip_type,
-                poolType: (newRide.pool_type as PoolType) || PoolType.SOLO,
-                poolStatus: (newRide.pool_status as PoolStatus) || PoolStatus.IDLE,
-                poolCount: newRide.pool_count || 1,
-                phone: newRide.phone,
-                date: newRide.trip_date,
-                time: newRide.trip_time,
-                stops: [],
-                isForSomeoneElse: false
-              } as BookingDetails), ...prev]);
+              setRidePool(prev => [enhanceTripData(newRide), ...prev]);
             } else if (payload.eventType === 'UPDATE') {
                if (newRide.status !== 'pending') {
                  setRidePool(prev => prev.filter(r => r.id !== newRide.id));
                } else {
-                 setRidePool(prev => prev.map(r => r.id === newRide.id ? { ...r, poolCount: newRide.pool_count, poolStatus: newRide.pool_status } : r));
+                 setRidePool(prev => prev.map(r => r.id === newRide.id ? enhanceTripData(newRide) : r));
                }
             }
           }
 
           if (role === UserRole.USER && booking && newRide?.id === booking.id) {
-            setBooking(prev => prev ? { ...prev, poolStatus: newRide.pool_status, poolCount: newRide.pool_count } : null);
-            
-            if (newRide.status === 'accepted') {
+            if (newRide.status === 'completed') {
+               setAppState(AppState.RATING);
+            } else if (newRide.status === 'accepted') {
               setAppState(AppState.TRIP_ACTIVE);
               if (newRide.from_lat && newRide.from_lng) {
                 setDriverLoc({ lat: newRide.from_lat + 0.002, lng: newRide.from_lng + 0.002 });
@@ -177,7 +185,7 @@ const App: React.FC = () => {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [role, booking]);
+  }, [role, booking, userLoc]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -243,10 +251,17 @@ const App: React.FC = () => {
       const isPool = booking.poolType !== PoolType.SOLO;
       let savedRide;
 
-      if (isPool && booking.fromCoords) {
-        const existingPool = await supabaseService.findMatchingPool(booking.fromCoords.lat, booking.fromCoords.lng, booking.poolType);
-        if (existingPool) {
-          savedRide = await supabaseService.joinPool(existingPool.id);
+      if (isPool && booking.fromCoords && booking.toCoords) {
+        const matchId = await poolMatcher.findBestMatch({
+          fromCoords: booking.fromCoords,
+          toCoords: booking.toCoords,
+          requestTime: new Date(),
+          poolType: booking.poolType,
+          maxDetour: 10 
+        });
+
+        if (matchId) {
+          savedRide = await supabaseService.joinPool(matchId);
         } else {
           savedRide = await supabaseService.createRideRequest({ ...booking, carCategory: category });
         }
@@ -258,7 +273,8 @@ const App: React.FC = () => {
         ...booking, 
         id: savedRide.id, 
         poolStatus: savedRide.pool_status, 
-        poolCount: savedRide.pool_count 
+        poolCount: savedRide.pool_count,
+        fareAmount: savedRide.fare_amount
       }));
       
     } catch (e: any) {
@@ -281,6 +297,13 @@ const App: React.FC = () => {
     }
   };
 
+  const handleInspectTrip = (ride: BookingDetails) => {
+    if (ride.fromCoords) {
+        setDropLoc(ride.toCoords);
+        setUserLoc(ride.fromCoords);
+    }
+  };
+
   const toggleRole = () => {
     setRole(prev => prev === UserRole.USER ? UserRole.DRIVER : UserRole.USER);
     setAppState(AppState.IDLE);
@@ -288,13 +311,35 @@ const App: React.FC = () => {
   };
 
   const handlePaymentSuccess = () => {
-    setAppState(AppState.IDLE);
-    setBooking(null);
-    alert("Payment confirmed! Your booking is complete.");
+    setAppState(AppState.RATING);
   };
 
-  const handleTriggerPayment = () => {
-    setAppState(AppState.PAYMENT);
+  const handleRatingSubmit = async (stars: number, tags: string[], comment: string) => {
+    if (!booking) return;
+    try {
+      await supabaseService.submitRating({
+        bookingId: booking.id!,
+        ratedBy: role,
+        ratedUserId: role === UserRole.USER ? (booking.driverPhone || 'driver') : (booking.phone || 'user'),
+        stars,
+        tags,
+        comment
+      });
+      alert("Feedback received! Thank you for using Agent Taxi.");
+      setAppState(AppState.IDLE);
+      setBooking(null);
+    } catch (e) {
+      console.warn("Rating error:", e);
+      setAppState(AppState.IDLE);
+      setBooking(null);
+    }
+  };
+
+  const handleTriggerPayment = async () => {
+    if (booking?.id) {
+       await supabaseService.initiatePaymentVerification(booking.id, booking.fareAmount || 0);
+       setAppState(AppState.PAYMENT);
+    }
   };
 
   const handleWithdrawalRequest = async (amount: number, upiId: string) => {
@@ -303,7 +348,7 @@ const App: React.FC = () => {
     try {
       await supabaseService.requestWithdrawal(phone, amount, upiId);
       alert("Withdrawal request submitted! Payout will reflect in 24-48 hours.");
-      setAppState(AppState.IDLE);
+      setAgentProfile(prev => prev ? { ...prev, balance: prev.balance - amount } : null);
     } catch (e) {
       alert("Withdrawal failed. Please check your connection.");
     }
@@ -334,10 +379,19 @@ const App: React.FC = () => {
 
       {appState === AppState.PAYMENT && booking && (
         <PaymentGateway 
-          amount={100} 
+          amount={booking.fareAmount || 0} 
           bookingId={booking.id || 'DEMO'}
           onSuccess={handlePaymentSuccess}
           onCancel={() => setAppState(AppState.TRIP_ACTIVE)}
+        />
+      )}
+
+      {appState === AppState.RATING && booking && (
+        <RatingModal 
+          booking={booking} 
+          userRole={role} 
+          onSubmit={handleRatingSubmit} 
+          onClose={() => { setAppState(AppState.IDLE); setBooking(null); }}
         />
       )}
 
@@ -366,8 +420,8 @@ const App: React.FC = () => {
       </header>
 
       {role === UserRole.USER && appState === AppState.IDLE && (
-        <div className="absolute inset-x-0 bottom-0 z-[1001] p-6 flex justify-center items-end h-full pointer-events-none">
-           <div className="w-full max-w-lg pointer-events-auto">
+        <div id="booking-container" className="absolute inset-x-0 bottom-0 z-[1001] px-4 pb-4 flex justify-center items-end h-full pointer-events-none transition-all duration-300">
+           <div className="w-full max-w-[450px] pointer-events-auto">
              {!pinningFor ? (
                 <BookingForm isLoggedIn={isLoggedIn} onComplete={handleInitialSearch} onEnterPinMode={(f) => setPinningFor(f)} externalPickup={extPickup} externalDrop={extDrop} />
              ) : (
@@ -381,30 +435,41 @@ const App: React.FC = () => {
       )}
 
       {role === UserRole.DRIVER && appState !== AppState.TRIP_ACTIVE && (
-        <div className="absolute inset-x-0 bottom-0 z-[1001] p-6 flex justify-center items-end h-full pointer-events-none">
-            <div className="w-full max-w-lg pointer-events-auto bg-white rounded-[2.5rem] p-6 shadow-2xl space-y-4">
+        <div className="absolute inset-x-0 bottom-0 z-[1001] p-4 flex justify-center items-end h-full pointer-events-none">
+            <div className="w-full max-w-xl pointer-events-auto bg-slate-50/90 backdrop-blur-xl rounded-[3rem] p-8 shadow-2xl space-y-6 border border-white max-h-[70vh] flex flex-col">
                 <div className="flex justify-between items-center mb-2">
-                    <h2 className="text-xl font-black uppercase tracking-tight">Agent Dashboard</h2>
-                    <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse">Live Pool</span>
+                    <div className="space-y-1">
+                      <h2 className="text-2xl font-black uppercase tracking-tight text-slate-900">Highway Feed</h2>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center">
+                        <span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
+                        Scanning Live Opportunities
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-black text-slate-900 uppercase">Available</p>
+                      <p className="text-lg font-black text-yellow-500 leading-none">{ridePool.length}</p>
+                    </div>
                 </div>
-                <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-2 hide-scrollbar">
+
+                <div className="space-y-5 overflow-y-auto pr-2 hide-scrollbar flex-1 pb-4">
                     {ridePool.length === 0 ? (
-                        <div className="py-12 text-center opacity-50 space-y-3 font-bold text-slate-400 text-xs">Scanning highway pool...</div>
+                        <div className="py-20 text-center space-y-6 animate-in fade-in">
+                          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto shadow-xl">
+                            <div className="w-10 h-10 border-4 border-slate-100 border-t-yellow-400 rounded-full animate-spin"></div>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="font-black text-slate-300 uppercase tracking-widest text-xs">Waiting for passenger load...</p>
+                            <p className="text-[10px] text-slate-400 font-bold max-w-[200px] mx-auto leading-relaxed">Ensure your location permissions are active to receive high-fare intercity requests.</p>
+                          </div>
+                        </div>
                     ) : (
                         ridePool.map(ride => (
-                            <div key={ride.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between group hover:bg-white hover:shadow-lg transition-all border-l-4 hover:border-l-yellow-400">
-                                <div className="space-y-1 truncate pr-4">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{ride.tripType} - {ride.poolType.replace('_', ' ')}</p>
-                                    <h4 className="font-bold text-slate-900 text-sm leading-tight truncate">{ride.from} → {ride.to}</h4>
-                                    <div className="flex items-center space-x-2">
-                                      <p className="text-[10px] font-bold text-slate-400 uppercase">📅 {ride.date} • ⏰ {ride.time}</p>
-                                      {ride.poolType !== PoolType.SOLO && (
-                                        <span className="bg-yellow-100 text-yellow-600 text-[8px] px-1.5 py-0.5 rounded font-black">{ride.poolCount}/3 RIDERS</span>
-                                      )}
-                                    </div>
-                                </div>
-                                <button onClick={() => handleAcceptRide(ride)} className="bg-yellow-400 text-slate-900 px-6 py-2.5 rounded-xl font-black text-[10px] uppercase shadow-md active:scale-95 flex-shrink-0">Claim</button>
-                            </div>
+                            <DriverTripCard 
+                                key={ride.id} 
+                                trip={ride} 
+                                onAccept={handleAcceptRide}
+                                onViewMap={handleInspectTrip}
+                            />
                         ))
                     )}
                 </div>

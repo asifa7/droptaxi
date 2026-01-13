@@ -33,7 +33,8 @@ export enum AppState {
   ARRIVED = 'ARRIVED',
   DRIVER_LISTING = 'DRIVER_LISTING',
   PAYMENT = 'PAYMENT',
-  WALLET = 'WALLET'
+  WALLET = 'WALLET',
+  RATING = 'RATING'
 }
 
 export enum CarCategory {
@@ -71,6 +72,8 @@ export interface AgentProfile {
   isVerified: boolean;
   balance: number;
   totalEarnings: number;
+  commissionDue: number;
+  commissionPaid: number;
   transactions: WalletTransaction[];
 }
 
@@ -95,6 +98,23 @@ export interface BookingDetails {
   carCategory: CarCategory;
   status?: 'pending' | 'accepted' | 'completed';
   fareAmount?: number;
+  driverPhone?: string;
+  // Enhanced Agent Fields
+  pickupDistance?: number;
+  estimatedPickupTime?: number;
+  routePreview?: string;
+  landmarks?: string[];
+  distanceKm?: number;
+  returnViability?: boolean;
+}
+
+export interface RatingData {
+  bookingId: string;
+  ratedBy: UserRole;
+  ratedUserId: string;
+  stars: number;
+  tags: string[];
+  comment?: string;
 }
 
 export interface RouteInsight {
