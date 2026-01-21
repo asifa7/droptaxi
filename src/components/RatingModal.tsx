@@ -30,7 +30,7 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
   ];
 
   const toggleTag = (tag: string) => {
-    setSelectedTags(prev => 
+    setSelectedTags(prev =>
       prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
     );
   };
@@ -38,10 +38,10 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
   return (
     <div className="fixed inset-0 z-[8000] flex items-center justify-center p-6 animate-in fade-in duration-300">
       <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl" onClick={onClose}></div>
-      
+
       <div className="relative w-full max-w-lg bg-white rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 duration-500 overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-        
+
         <div className="text-center space-y-4 mb-10">
           <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">
             Rate your {userRole === UserRole.USER ? 'Driver' : 'Passenger'}
@@ -49,6 +49,12 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
           <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase leading-none">
             How was the trip?
           </h2>
+          {booking.fareAmount && (
+            <div className="bg-green-50 rounded-2xl p-4 inline-block border border-green-100 mt-2">
+              <p className="text-[10px] font-black uppercase text-green-600 mb-1">Final Fare</p>
+              <p className="text-3xl font-black text-slate-900 leading-none">₹{booking.fareAmount.toLocaleString()}</p>
+            </div>
+          )}
         </div>
 
         {/* Star Selection */}
@@ -57,9 +63,8 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
             <button
               key={star}
               onClick={() => setRating(star)}
-              className={`text-5xl transition-all hover:scale-125 active:scale-90 ${
-                star <= rating ? 'text-yellow-400 drop-shadow-lg' : 'text-slate-100'
-              }`}
+              className={`text-5xl transition-all hover:scale-125 active:scale-90 ${star <= rating ? 'text-yellow-400 drop-shadow-lg' : 'text-slate-100'
+                }`}
             >
               ★
             </button>
@@ -72,11 +77,10 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
             <button
               key={tag}
               onClick={() => toggleTag(tag)}
-              className={`p-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all border-2 ${
-                selectedTags.includes(tag)
+              className={`p-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all border-2 ${selectedTags.includes(tag)
                   ? 'bg-yellow-400 border-yellow-400 text-slate-900 shadow-lg'
                   : 'bg-slate-50 border-slate-50 text-slate-500 hover:border-slate-200'
-              }`}
+                }`}
             >
               {tag}
             </button>
@@ -91,8 +95,8 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
             className="w-full p-6 rounded-[2rem] bg-slate-50 border-none font-bold text-slate-800 text-sm shadow-inner min-h-[100px] outline-none focus:ring-2 focus:ring-yellow-400 transition-all"
           />
 
-          <button 
-            onClick={() => onSubmit(rating, selectedTags, comment)} 
+          <button
+            onClick={() => onSubmit(rating, selectedTags, comment)}
             className="w-full bg-slate-900 text-white font-black py-5 rounded-[2rem] shadow-xl uppercase tracking-widest text-xs active:scale-95 transition-all mt-4"
           >
             Submit Feedback

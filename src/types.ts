@@ -75,6 +75,8 @@ export interface AgentProfile {
   commissionDue: number;
   commissionPaid: number;
   transactions: WalletTransaction[];
+  isOnline?: boolean;
+  lastOnlineAt?: string;
 }
 
 export interface BookingDetails {
@@ -90,7 +92,7 @@ export interface BookingDetails {
   poolType: PoolType;
   poolStatus?: PoolStatus;
   poolCount?: number;
-  isRecurring?: boolean; 
+  isRecurring?: boolean;
   useVirtualStop?: boolean;
   phone?: string;
   recipientPhone?: string;
@@ -106,6 +108,8 @@ export interface BookingDetails {
   landmarks?: string[];
   distanceKm?: number;
   returnViability?: boolean;
+  marketMinFare?: number;
+  marketMaxFare?: number;
 }
 
 export interface RatingData {

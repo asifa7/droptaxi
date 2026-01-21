@@ -6,9 +6,12 @@ interface DriverTripCardProps {
   trip: BookingDetails;
   onAccept: (trip: BookingDetails) => void;
   onViewMap: (trip: BookingDetails) => void;
+  onReject?: (trip: BookingDetails) => void;
+  onStart?: (trip: BookingDetails) => void;
+  onComplete?: (trip: BookingDetails) => void;
 }
 
-const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewMap }) => {
+const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewMap, onReject, onStart, onComplete }) => {
   const potentialEarnings = trip.fareAmount || 1250; // Fallback for UI
   const distance = trip.distanceKm || 120;
   const duration = "2h 15m"; // This could be calculated from distance
@@ -19,15 +22,31 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
       <div className="flex justify-between items-start mb-5">
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
-            <span className="px-3 py-1 bg-green-100 text-green-700 text-[9px] font-black rounded-full uppercase tracking-widest animate-pulse">
-              {(trip.pickupDistance || 0.5).toFixed(1)} KM AWAY
-            </span>
-            <span className="px-3 py-1 bg-slate-100 text-slate-600 text-[9px] font-black rounded-full uppercase tracking-widest">
-              {(trip.estimatedPickupTime || 5)} MIN PICKUP
-            </span>
+            {(trip.status === 'IN_PROGRESS' || trip.status === 'started') ? (
+              <span className="px-3 py-1 bg-green-500 text-white text-[9px] font-black rounded-full uppercase tracking-widest animate-pulse">
+                TRIP IN PROGRESS
+              </span>
+            ) : trip.status === 'COMPLETED' ? (
+              <span className="px-3 py-1 bg-slate-800 text-white text-[9px] font-black rounded-full uppercase tracking-widest">
+                COMPLETED
+              </span>
+            ) : trip.status === 'DRIVER_ACCEPTED' ? (
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-[9px] font-black rounded-full uppercase tracking-widest">
+                READY TO START
+              </span>
+            ) : (
+              <>
+                <span className="px-3 py-1 bg-green-100 text-green-700 text-[9px] font-black rounded-full uppercase tracking-widest animate-pulse">
+                  {(trip.pickupDistance || 0.5).toFixed(1)} KM AWAY
+                </span>
+                <span className="px-3 py-1 bg-slate-100 text-slate-600 text-[9px] font-black rounded-full uppercase tracking-widest">
+                  {(trip.estimatedPickupTime || 5)} MIN PICKUP
+                </span>
+              </>
+            )}
           </div>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-             {trip.tripType} • {trip.carCategory}
+            {trip.tripType} • {trip.carCategory}
           </p>
         </div>
         <div className="text-right">
@@ -47,12 +66,12 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
             </p>
           </div>
         </div>
-        
+
         <div className="border-l-2 border-dashed border-slate-200 ml-[5px] pl-6 py-4 my-1">
           <div className="bg-slate-50 p-2 rounded-xl inline-block">
-             <p className="text-[10px] text-slate-500 font-bold flex items-center">
-               <span className="mr-2">🛣️</span> {trip.routePreview || 'NH-44 → Highway Route'}
-             </p>
+            <p className="text-[10px] text-slate-500 font-bold flex items-center">
+              <span className="mr-2">🛣️</span> {trip.routePreview || 'NH-44 → Highway Route'}
+            </p>
           </div>
           <p className="text-[10px] text-slate-400 font-bold mt-2">
             🕐 {duration} • {distance} km Total
@@ -93,18 +112,52 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
 
       {/* Action Buttons */}
       <div className="grid grid-cols-2 gap-3">
-        <button 
-          onClick={() => onViewMap(trip)}
-          className="bg-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 active:scale-95 transition-all"
-        >
-          Inspect Route
-        </button>
-        <button 
-          onClick={() => onAccept(trip)}
-          className="bg-yellow-400 text-slate-900 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-yellow-400/20 hover:bg-yellow-500 active:scale-95 transition-all"
-        >
-          Claim Trip
-        </button>
+        {(!trip.status || trip.status === 'pending' || trip.status === 'REQUESTED') && (
+          <>
+            <button
+              onClick={() => onAccept(trip)}
+              className="bg-yellow-400 text-slate-900 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-yellow-400/20 hover:bg-yellow-500 active:scale-95 transition-all"
+            >
+              Accept Request
+            </button>
+            <button
+              onClick={() => {
+                if (onReject) onReject(trip);
+              }}
+              className="bg-red-50 text-red-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-red-100 border border-red-100 active:scale-95 transition-all"
+            >
+              Reject
+            </button>
+          </>
+        )}
+        {trip.status === 'DRIVER_ACCEPTED' && (
+          <button
+            onClick={() => {
+              if (onStart) onStart(trip);
+            }}
+            className="col-span-2 bg-green-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-green-500/20 hover:bg-green-600 active:scale-95 transition-all"
+          >
+            Start Trip
+          </button>
+        )}
+        {(trip.status === 'IN_PROGRESS' || trip.status === 'started') && (
+          <button
+            onClick={() => {
+              if (onComplete) onComplete(trip);
+            }}
+            className="col-span-2 bg-red-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-500/20 hover:bg-red-600 active:scale-95 transition-all"
+          >
+            End Ride (Complete)
+          </button>
+        )}
+        {(trip.status === 'COMPLETED' || trip.status === 'completed') && (
+          <button
+            disabled
+            className="col-span-2 bg-slate-800 text-slate-500 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest cursor-not-allowed border border-slate-200"
+          >
+            Ride Finished
+          </button>
+        )}
       </div>
 
       {/* Return Trip Indicator */}
