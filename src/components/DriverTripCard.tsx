@@ -12,38 +12,50 @@ interface DriverTripCardProps {
 }
 
 const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewMap, onReject, onStart, onComplete }) => {
-  const potentialEarnings = trip.fareAmount || 1250; // Fallback for UI
+  const potentialEarnings = trip.fareAmount || 1250;
   const distance = trip.distanceKm || 120;
-  const duration = "2h 15m"; // This could be calculated from distance
+  const duration = "2h 15m";
+
+  const renderStatusBadge = () => {
+    if (trip.status === 'IN_PROGRESS' || trip.status === 'started') {
+      return (
+        <span className="px-3 py-1 bg-green-500 text-white text-[9px] font-black rounded-full uppercase tracking-widest animate-pulse">
+          TRIP IN PROGRESS
+        </span>
+      );
+    }
+    if (trip.status === 'COMPLETED' || trip.status === 'completed') {
+      return (
+        <span className="px-3 py-1 bg-slate-800 text-white text-[9px] font-black rounded-full uppercase tracking-widest">
+          COMPLETED
+        </span>
+      );
+    }
+    if (trip.status === 'DRIVER_ACCEPTED') {
+      return (
+        <span className="px-3 py-1 bg-blue-100 text-blue-700 text-[9px] font-black rounded-full uppercase tracking-widest">
+          READY TO START
+        </span>
+      );
+    }
+    return (
+      <>
+        <span className="px-3 py-1 bg-green-100 text-green-700 text-[9px] font-black rounded-full uppercase tracking-widest animate-pulse">
+          {(trip.pickupDistance || 0.5).toFixed(1)} KM AWAY
+        </span>
+        <span className="px-3 py-1 bg-slate-100 text-slate-600 text-[9px] font-black rounded-full uppercase tracking-widest">
+          {(trip.estimatedPickupTime || 5)} MIN PICKUP
+        </span>
+      </>
+    );
+  };
 
   return (
     <div className="bg-white rounded-[2rem] p-6 border-l-8 border-yellow-400 shadow-xl shadow-slate-200/50 hover:shadow-2xl hover:-translate-y-1 transition-all group border border-slate-100">
-      {/* Priority Badge & Fare */}
       <div className="flex justify-between items-start mb-5">
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
-            {(trip.status === 'IN_PROGRESS' || trip.status === 'started') ? (
-              <span className="px-3 py-1 bg-green-500 text-white text-[9px] font-black rounded-full uppercase tracking-widest animate-pulse">
-                TRIP IN PROGRESS
-              </span>
-            ) : trip.status === 'COMPLETED' ? (
-              <span className="px-3 py-1 bg-slate-800 text-white text-[9px] font-black rounded-full uppercase tracking-widest">
-                COMPLETED
-              </span>
-            ) : trip.status === 'DRIVER_ACCEPTED' ? (
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-[9px] font-black rounded-full uppercase tracking-widest">
-                READY TO START
-              </span>
-            ) : (
-              <>
-                <span className="px-3 py-1 bg-green-100 text-green-700 text-[9px] font-black rounded-full uppercase tracking-widest animate-pulse">
-                  {(trip.pickupDistance || 0.5).toFixed(1)} KM AWAY
-                </span>
-                <span className="px-3 py-1 bg-slate-100 text-slate-600 text-[9px] font-black rounded-full uppercase tracking-widest">
-                  {(trip.estimatedPickupTime || 5)} MIN PICKUP
-                </span>
-              </>
-            )}
+            {renderStatusBadge()}
           </div>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
             {trip.tripType} • {trip.carCategory}
@@ -55,7 +67,6 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
         </div>
       </div>
 
-      {/* Route Overview */}
       <div className="mb-6 space-y-1">
         <div className="flex items-start space-x-3">
           <div className="mt-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white shadow-sm flex-shrink-0"></div>
@@ -86,18 +97,17 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
         </div>
       </div>
 
-      {/* Pool Info */}
       {trip.poolType !== PoolType.SOLO && (
         <div className="flex items-center justify-between mb-5 bg-yellow-50/50 p-3 rounded-2xl border border-yellow-100">
           <div className="flex items-center space-x-2">
             <div className="flex -space-x-2">
-              {[...Array(trip.poolCount || 1)].map((_, i) => (
-                <div key={i} className="w-8 h-8 bg-slate-900 rounded-full border-2 border-white flex items-center justify-center text-xs shadow-sm">
+              {new Array(Math.min(3, trip.poolCount || 1)).fill(0).map((_, i) => (
+                <div key={`matched-${i}`} className="w-8 h-8 bg-slate-900 rounded-full border-2 border-white flex items-center justify-center text-xs shadow-sm">
                   👤
                 </div>
               ))}
-              {[...Array(3 - (trip.poolCount || 1))].map((_, i) => (
-                <div key={i} className="w-8 h-8 bg-slate-200 rounded-full border-2 border-white flex items-center justify-center text-[8px] text-slate-400 font-black">
+              {new Array(Math.max(0, 3 - (trip.poolCount || 1))).fill(0).map((_, i) => (
+                <div key={`empty-${i}`} className="w-8 h-8 bg-slate-200 rounded-full border-2 border-white flex items-center justify-center text-[8px] text-slate-400 font-black">
                   ?
                 </div>
               ))}
@@ -110,7 +120,6 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
         </div>
       )}
 
-      {/* Action Buttons */}
       <div className="grid grid-cols-2 gap-3">
         {(!trip.status || trip.status === 'pending' || trip.status === 'REQUESTED') && (
           <>
@@ -160,7 +169,6 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
         )}
       </div>
 
-      {/* Return Trip Indicator */}
       {trip.returnViability && (
         <div className="mt-4 bg-blue-50 p-3 rounded-2xl text-center border border-blue-100 animate-in slide-in-from-top-1">
           <p className="text-[9px] font-black text-blue-700 uppercase tracking-tighter">

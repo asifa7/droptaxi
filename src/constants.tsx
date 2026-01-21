@@ -11,7 +11,7 @@ export const COLORS = {
 
 export const PHONE_NUMBER = '7200134807';
 export const BRAND_NAME = 'Agent Taxi';
-export const COMPANY_VPA = '7200134807@ybl'; 
+export const COMPANY_VPA = '7200134807@ybl';
 
 // AGENT WALLET CONFIG
 export const COMMISSION_RATE = 0.10; // 10% Platform Fee
@@ -39,7 +39,7 @@ export const CAR_OPTIONS: CarOption[] = [
   {
     id: 'SEDAN',
     name: 'SEDAN',
-    subName: 'Rs.14',
+    subName: '₹14/KM',
     description: 'Swift Dzire, Toyota Etios or similar executive sedans',
     oneWayPrice: 14,
     roundTripPrice: 13,
@@ -57,7 +57,7 @@ export const CAR_OPTIONS: CarOption[] = [
   {
     id: 'SUV',
     name: 'SUV (6+1)',
-    subName: 'Rs.19',
+    subName: '₹19/KM',
     description: 'Maruti Ertiga, Mahindra Marazzo or similar',
     oneWayPrice: 19,
     roundTripPrice: 18,
@@ -75,7 +75,7 @@ export const CAR_OPTIONS: CarOption[] = [
   {
     id: 'INNOVA',
     name: 'INNOVA CRYSTA',
-    subName: 'Rs.24',
+    subName: '₹24/KM',
     description: 'The Gold Standard of Travel Comfort',
     oneWayPrice: 24,
     roundTripPrice: 20,

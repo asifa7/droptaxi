@@ -10,9 +10,9 @@ import DriverTripCard from './components/DriverTripCard';
 import RatingModal from './components/RatingModal';
 import RiderHistory from './components/RiderHistory';
 import DriverHistory from './components/DriverHistory';
-import { AppState, BookingDetails, CarCategory, LatLng, UserRole, AgentProfile, PoolType, PoolStatus, WalletTransaction, TripType } from './types';
+import { AppState, BookingDetails, CarCategory, LatLng, UserRole, AgentProfile, PoolType, PoolStatus, TripType } from './types';
 import { supabase, supabaseService, isSupabaseConfigured } from './supabaseClient';
-import { PHONE_NUMBER, BRAND_NAME, COMMISSION_RATE } from './constants';
+import { PHONE_NUMBER, BRAND_NAME } from './constants';
 import { poolMatcher } from './services/poolMatcher';
 import { PricingEngine } from './services/pricingService';
 
@@ -113,7 +113,7 @@ const App: React.FC = () => {
     if (pickupCoords && userLoc) {
       const dx = pickupCoords.lat - userLoc.lat;
       const dy = pickupCoords.lng - userLoc.lng;
-      pickupDist = Math.sqrt(dx * dx + dy * dy) * 111;
+      pickupDist = Math.hypot(dx, dy) * 111;
     }
 
     return {
@@ -139,7 +139,7 @@ const App: React.FC = () => {
       landmarks: rawTrip.from_name.includes('Airport') ? ["Near Terminal 1", "Taxi Stand B"] : ["Near Main Circle", "Opposite Mall"],
       distanceKm: rawTrip.distance_km || 150,
       returnViability: Math.random() > 0.4,
-      fareAmount: rawTrip.fare_amount || (rawTrip.pool_type !== PoolType.SOLO ? 850 : 2400)
+      fareAmount: rawTrip.fare_amount || (rawTrip.pool_type === PoolType.SOLO ? 2400 : 850)
     };
   };
 
@@ -162,8 +162,8 @@ const App: React.FC = () => {
               setDriverLoc({ lat: booking.fromCoords.lat + 0.002, lng: booking.fromCoords.lng + 0.002 });
             }
           }
-        } catch (e) {
-          // Silent fail
+        } catch (err) {
+          console.error("Status check failed:", err);
         }
       }, 4000);
     } else if (role === UserRole.USER && appState === AppState.TRIP_ACTIVE && booking?.id) {
@@ -176,7 +176,9 @@ const App: React.FC = () => {
             setBooking(prev => prev ? { ...prev, status: 'COMPLETED' } : null);
             setAppState(AppState.RATING);
           }
-        } catch (e) { }
+        } catch (err) {
+          console.error("Completion check failed:", err);
+        }
       }, 4000);
     }
 
@@ -186,6 +188,32 @@ const App: React.FC = () => {
   // ... (lines 165-608)
 
 
+
+  const handleBookingChange = useCallback((payload: any) => {
+    const newRide: any = payload.new;
+    if (role === UserRole.DRIVER) {
+      if (payload.eventType === 'INSERT' && newRide.status === 'pending') {
+        setRidePool(prev => [enhanceTripData(newRide), ...prev]);
+      } else if (payload.eventType === 'UPDATE') {
+        if (newRide.status === 'pending') {
+          setRidePool(prev => prev.map(r => r.id === newRide.id ? enhanceTripData(newRide) : r));
+        } else {
+          setRidePool(prev => prev.filter(r => r.id !== newRide.id));
+        }
+      }
+    }
+
+    if (role === UserRole.USER && booking && newRide?.id === booking.id) {
+      if (newRide.status === 'completed') {
+        setAppState(AppState.RATING);
+      } else if (newRide.status === 'accepted') {
+        setAppState(AppState.TRIP_ACTIVE);
+        if (newRide.from_lat && newRide.from_lng) {
+          setDriverLoc({ lat: newRide.from_lat + 0.002, lng: newRide.from_lng + 0.002 });
+        }
+      }
+    }
+  }, [role, booking]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -209,36 +237,12 @@ const App: React.FC = () => {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bookings' },
-        (payload) => {
-          const newRide: any = payload.new;
-          if (role === UserRole.DRIVER) {
-            if (payload.eventType === 'INSERT' && newRide.status === 'pending') {
-              setRidePool(prev => [enhanceTripData(newRide), ...prev]);
-            } else if (payload.eventType === 'UPDATE') {
-              if (newRide.status !== 'pending') {
-                setRidePool(prev => prev.filter(r => r.id !== newRide.id));
-              } else {
-                setRidePool(prev => prev.map(r => r.id === newRide.id ? enhanceTripData(newRide) : r));
-              }
-            }
-          }
-
-          if (role === UserRole.USER && booking && newRide?.id === booking.id) {
-            if (newRide.status === 'completed') {
-              setAppState(AppState.RATING);
-            } else if (newRide.status === 'accepted') {
-              setAppState(AppState.TRIP_ACTIVE);
-              if (newRide.from_lat && newRide.from_lng) {
-                setDriverLoc({ lat: newRide.from_lat + 0.002, lng: newRide.from_lng + 0.002 });
-              }
-            }
-          }
-        }
+        handleBookingChange
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [role, booking, userLoc]);
+  }, [role, booking, userLoc, handleBookingChange]);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -348,21 +352,20 @@ const App: React.FC = () => {
   const handleAcceptRide = async (ride: BookingDetails) => {
     try {
       const driverIdentifier = agentProfile?.phone || userPhone || 'anonymous-driver';
-      // In a real app, we'd get the UUID from auth.user.id
-      // For now, we will pass a generated UUID if auth is missing or just null to rely on phone
-      const { data: { session } } = await supabase.auth.getSession();
-      const driverId = session?.user?.id; // This is the real UUID if logged in
+      const { data } = await supabase.auth.getSession();
+      const driverId = data.session?.user?.id;
 
-      if (isSupabaseConfigured()) {
-        await supabaseService.acceptRide(ride.id!, driverIdentifier, driverId);
+      if (isSupabaseConfigured() && ride.id) {
+        await supabaseService.acceptRide(ride.id, driverIdentifier, driverId);
       }
       setBooking(ride);
       setAppState(AppState.TRIP_ACTIVE);
     } catch (err: any) {
       const msg = err.message || String(err);
       alert(msg === "RIDE_ALREADY_TAKEN" ? "This ride was already claimed." : `Error: ${msg}`);
-      // Refresh list to remove stale item
-      setRidePool(prev => prev.filter(r => r.id !== ride.id));
+      if (ride.id) {
+        setRidePool(prev => prev.filter(r => r.id !== ride.id));
+      }
     }
   };
 
@@ -372,35 +375,36 @@ const App: React.FC = () => {
   };
 
   const handleCompleteRide = async (ride: BookingDetails) => {
+    if (!ride.id) return;
     try {
       if (isSupabaseConfigured()) {
-        // Use existing fare/distance for now as we don't have GPS tracking in this demo
-        await supabaseService.completeRide(ride.id!, ride.fareAmount || 0, ride.distanceKm || 0);
+        await supabaseService.completeRide(ride.id, ride.fareAmount || 0, ride.distanceKm || 0);
         setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: 'COMPLETED' } : r));
-        // Remove from active pool after short delay
+
         setTimeout(() => {
-          setRidePool(prev => prev.filter(r => r.id !== ride.id));
+          setRidePool(p => p.filter(r => r.id !== ride.id));
         }, 5000);
       } else {
         setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: 'COMPLETED' } : r));
       }
     } catch (err: any) {
+      console.error("Complete ride failed:", err);
       alert("Failed to complete ride: " + err.message);
     }
   };
 
   const handleStartRide = async (ride: BookingDetails) => {
+    if (!ride.id) return;
     try {
       if (isSupabaseConfigured()) {
-        const updated = await supabaseService.startRide(ride.id!);
-        // Update local state
+        const updated = await supabaseService.startRide(ride.id);
         setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: updated.status } : r));
         setBooking(prev => prev?.id === ride.id ? { ...prev, status: updated.status } : prev);
       } else {
-        // Demo mode
         setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: 'IN_PROGRESS' } : r));
       }
     } catch (err: any) {
+      console.error("Start ride failed:", err);
       alert("Failed to start ride: " + err.message);
     }
   };
@@ -457,7 +461,8 @@ const App: React.FC = () => {
       await supabaseService.requestWithdrawal(phone, amount, upiId);
       alert("Withdrawal request submitted! Payout will reflect in 24-48 hours.");
       setAgentProfile(prev => prev ? { ...prev, balance: prev.balance - amount } : null);
-    } catch (e) {
+    } catch (err) {
+      console.error("Withdrawal failed:", err);
       alert("Withdrawal failed. Please check your connection.");
     }
   };
@@ -530,13 +535,13 @@ const App: React.FC = () => {
       {role === UserRole.USER && appState === AppState.IDLE && (
         <div id="booking-container" className="absolute inset-x-0 bottom-0 z-[1001] px-4 pb-4 flex justify-center items-end h-full pointer-events-none transition-all duration-300">
           <div className="w-full max-w-[450px] pointer-events-auto">
-            {!pinningFor ? (
-              <BookingForm isLoggedIn={isLoggedIn} onComplete={handleInitialSearch} onEnterPinMode={(f) => setPinningFor(f)} externalPickup={extPickup} externalDrop={extDrop} />
-            ) : (
+            {pinningFor ? (
               <div className="bg-white p-6 rounded-[2.5rem] shadow-2xl space-y-4 animate-in slide-in-from-bottom-20">
                 <h3 className="text-lg font-bold text-slate-900 truncate">{currentPinAddress}</h3>
                 <button onClick={confirmPin} className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl uppercase tracking-widest shadow-xl">Confirm Pin</button>
               </div>
+            ) : (
+              <BookingForm isLoggedIn={isLoggedIn} onComplete={handleInitialSearch} onEnterPinMode={(f) => setPinningFor(f)} externalPickup={extPickup} externalDrop={extDrop} />
             )}
           </div>
         </div>
@@ -552,18 +557,19 @@ const App: React.FC = () => {
                   {agentProfile?.isOnline ? (
                     <span className="flex items-center text-[10px] font-black text-green-600 uppercase tracking-widest bg-green-50 px-2 py-1 rounded-md border border-green-100">
                       <span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
-                      Online & Scanning
+                      {" "}Online & Scanning
                     </span>
                   ) : (
                     <span className="flex items-center text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
                       <span className="w-2 h-2 bg-slate-400 rounded-full mr-2"></span>
-                      Offline
+                      {" "}Offline
                     </span>
                   )}
                 </div>
               </div>
               <div className="flex flex-col items-end space-y-2">
                 <label className="relative inline-flex items-center cursor-pointer">
+                  <span className="sr-only">Toggle Online Status</span>
                   <input
                     type="checkbox"
                     className="sr-only peer"

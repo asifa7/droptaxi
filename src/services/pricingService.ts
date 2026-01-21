@@ -137,13 +137,9 @@ export class PricingEngine {
     /**
      * Determine if the ride is Local or Intercity
      */
-    static classifyRideType(distanceKm: number, pickupCity?: string, dropoffCity?: string): TripType {
-        // Simple distance check for now, can be enhanced with Geofencing later
-        return distanceKm >= 50 ? TripType.ONE_WAY : TripType.ONE_WAY;
-    }
-
-    static isIntercity(distanceKm: number, config: PricingConfig): boolean {
-        return distanceKm >= config.cityRadiusKm;
+    static isIntercity(distanceKm: number, carType: CarCategory): boolean {
+        const config = this.config[carType];
+        return distanceKm >= (config?.cityRadiusKm ?? 50);
     }
 
     /**
@@ -154,29 +150,27 @@ export class PricingEngine {
         distanceKm: number,
         durationMins: number,
         tripDate: Date,
-        surgeMulti: number = 1.0,
-        waitingMins: number = 0
+        surgeMulti = 1.0,
+        waitingMins = 0
     ): FareResult {
-        // init if not done (optimistic, won't block this call but will help future ones)
+        // init if not done
         if (!this.initialized) {
             this.fetchAndSyncRules();
         }
 
-        const config = { ...this.config[carType] }; // Clone
+        const config = { ...this.config[carType] };
 
         // Logic: Intercity vs City
         const isIntercityRide = distanceKm >= config.cityRadiusKm;
         const ratePerKm = isIntercityRide ? config.ratePerKmIntercity : config.ratePerKmCity;
 
-        // Force sync with any local constants/overrides if needed, but Supabase should be source of truth now.
-
         const isNight = this.checkNightTime(tripDate);
         const nightMulti = isNight ? config.nightMultiplier : 1.0;
 
-        let base = config.baseFare;
-        let distCost = distanceKm * ratePerKm;
-        let timeCost = durationMins * config.ratePerMin;
-        let waitCost = waitingMins * config.waitingRate;
+        const base = config.baseFare;
+        const distCost = distanceKm * ratePerKm;
+        const timeCost = durationMins * config.ratePerMin;
+        const waitCost = waitingMins * config.waitingRate;
 
         // Subtotal before multipliers
         let subtotal = base + distCost + timeCost + waitCost;
@@ -190,7 +184,7 @@ export class PricingEngine {
         subtotal *= nightMulti;
 
         // Minimum Fare Check
-        let total = Math.max(subtotal, config.minFare);
+        const total = Math.max(subtotal, config.minFare);
 
         return {
             totalFare: Math.round(total),

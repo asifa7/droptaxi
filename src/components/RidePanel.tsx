@@ -28,27 +28,25 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
   useEffect(() => {
     const fetchDist = async () => {
       if (bookingDetails?.fromCoords && bookingDetails?.toCoords) {
-        // First try rough geometric distance as base
         const geoDist = calculateDistance(bookingDetails.fromCoords, bookingDetails.toCoords);
-        if (geoDist > 0) setDistanceKm(Math.ceil(geoDist * 1.2)); // +20% buffer for road vs air distance
+        if (geoDist > 0) setDistanceKm(Math.ceil(geoDist * 1.2));
 
         try {
           const insights = await getTripInsights(bookingDetails.from, bookingDetails.to, bookingDetails.fromCoords);
           if (insights?.distance) {
-            const numeric = parseFloat(insights.distance.replace(/[^\d.]/g, ''));
-            if (!isNaN(numeric)) setDistanceKm(numeric);
+            const numeric = Number.parseFloat(insights.distance.replaceAll(/[^\d.]/g, ''));
+            if (!Number.isNaN(numeric)) setDistanceKm(numeric);
           }
-        } catch (e) {
-          console.log("Using geo distance fallback");
+        } catch (err) {
+          console.log("Using geo distance fallback", err);
         }
       }
     };
     if (appState === AppState.SELECTING_VEHICLE) fetchDist();
   }, [bookingDetails, appState]);
 
-  // Pool Logic Simulator
   useEffect(() => {
-    let interval: any;
+    let interval: NodeJS.Timeout;
     if (appState === AppState.SEARCHING_DRIVER && bookingDetails?.poolType !== PoolType.SOLO) {
       setPoolStatus(PoolStatus.WAITING);
       interval = setInterval(() => {
@@ -73,13 +71,14 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
       setPassengerCount(1);
       setPoolStatus(PoolStatus.IDLE);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [appState, bookingDetails?.poolType]);
 
   const calculateTotal = (car: CarOption) => {
     if (!bookingDetails) return 0;
 
-    // Estimate Duration: 40km/h avg speed -> 1.5 mins per km
     const durationMins = Math.ceil(distanceKm * 1.5);
     const tripDate = new Date(`${bookingDetails.date}T${bookingDetails.time}`);
 
@@ -93,7 +92,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
     let finalFare = fareResult.totalFare;
 
     if (bookingDetails.poolType !== PoolType.SOLO) {
-      finalFare = Math.round(finalFare * 0.6); // 40% discount for pool
+      finalFare = Math.round(finalFare * 0.6);
     }
     return finalFare;
   };
@@ -101,7 +100,6 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
   const totals = useMemo(() => {
     const car = CAR_OPTIONS.find(c => c.id === selected) || CAR_OPTIONS[0];
     const riderTotal = calculateTotal(car);
-    // Rough estimate for driver earnings (mock logic for UI)
     const driverEarnings = Math.round(riderTotal * 0.8);
 
     return {
@@ -123,21 +121,40 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
     setShowModal(true);
   };
 
+  const poolTitle = bookingDetails?.poolType === PoolType.SOLO ? 'Solo Travel' : 'Shared Pool Travel';
+  const confirmText = `Confirm ${bookingDetails?.poolType !== PoolType.SOLO ? 'Pool' : 'Solo'} Ride`;
+  const bookingModeLabel = bookingDetails?.poolType.replaceAll('_', ' ');
+
+  const getPoolingStatusText = () => {
+    switch (poolStatus) {
+      case PoolStatus.WAITING: return 'Scanning for Riders...';
+      case PoolStatus.FILLING: return 'Co-passenger Found!';
+      default: return 'Dispatching Pool...';
+    }
+  };
+
+  const activeTripStatus = (bookingDetails?.status === 'IN_PROGRESS' || bookingDetails?.status === 'started') ? 'Trip Started' : 'Driver Assigned';
+
   return (
     <>
       {showModal && modalCar && (
         <div className="fixed inset-0 z-[3000] flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setShowModal(false)}></div>
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in w-full h-full cursor-default"
+            onClick={() => setShowModal(false)}
+            aria-label="Close vehicle details"
+          />
           <div className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 duration-500">
             <div className="relative h-48 bg-slate-100">
               <img src={modalCar.image} className="w-full h-full object-cover" alt={modalCar.name} />
-              <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 w-10 h-10 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center shadow-md">✕</button>
+              <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 w-10 h-10 bg-white/80 backdrop-blur-md rounded-full flex items-center justify-center shadow-md" aria-label="Close">✕</button>
             </div>
             <div className="p-8 space-y-6">
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="text-2xl font-black text-slate-900 uppercase">{modalCar.name}</h3>
-                  <p className="text-sm font-bold text-slate-500">{bookingDetails?.poolType === PoolType.SOLO ? 'Solo Travel' : 'Shared Pool Travel'}</p>
+                  <p className="text-sm font-bold text-slate-500">{poolTitle}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-2xl font-black text-slate-900">₹{totals.rider.toLocaleString()}</p>
@@ -154,23 +171,13 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                 <div className="space-y-2">
                   <div className="flex items-center justify-between p-3 bg-white rounded-2xl border-2 border-yellow-400 shadow-sm">
                     <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-yellow-400 text-xs">🛞</div>
+                      <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-yellow-400 text-xs" aria-hidden="true">🛞</div>
                       <span className="font-black text-sm text-slate-900">Agent {bookingDetails?.poolType !== PoolType.SOLO ? 'Pool' : 'Taxi'}</span>
                     </div>
                     <span className="font-black text-slate-900">₹{totals.rider.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
-
-              {bookingDetails?.poolType !== PoolType.SOLO && (
-                <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-100 flex items-start space-x-3">
-                  <span className="text-lg">📢</span>
-                  <div>
-                    <p className="text-[10px] font-black uppercase text-slate-900">Linear Overlap Matching</p>
-                    <p className="text-[10px] text-slate-500 font-bold leading-tight">We match you with riders on your direct path. If no match in 90s, we dispatch anyway or offer solo.</p>
-                  </div>
-                </div>
-              )}
 
               <button onClick={() => {
                 onConfirm(selected, {
@@ -181,7 +188,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                 });
                 setShowModal(false);
               }} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest flex items-center justify-center space-x-3 transition-transform active:scale-95">
-                <span>Confirm {bookingDetails?.poolType !== PoolType.SOLO ? 'Pool' : 'Solo'} Ride</span>
+                <span>{confirmText}</span>
               </button>
             </div>
           </div>
@@ -196,7 +203,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
             <div className="flex justify-between items-end">
               <div>
                 <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Select Vehicle</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase">{distanceKm.toFixed(1)} KM • {bookingDetails?.poolType.replace('_', ' ')}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase">{distanceKm.toFixed(1)} KM • {bookingModeLabel}</p>
               </div>
               <button onClick={onCancel} className="text-[10px] font-black uppercase text-slate-400 hover:text-red-500 mb-1">Cancel</button>
             </div>
@@ -206,20 +213,22 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                 const isSelected = selected === car.id;
                 const riderPrice = calculateTotal(car);
                 const soloOriginal = (Math.max(distanceKm, car.oneWayMinKm) * car.oneWayPrice) + car.driverAllowance;
+                const discountText = bookingDetails?.poolType !== PoolType.SOLO ? '40% OFF' : 'Best Rate';
 
                 return (
                   <button
                     key={car.id}
                     onClick={() => handleSelectCar(car)}
                     className={`flex-shrink-0 w-44 p-4 rounded-[2.2rem] border-4 transition-all relative overflow-hidden group ${isSelected ? 'border-yellow-400 bg-yellow-50 shadow-xl scale-105' : 'border-slate-50 bg-white opacity-90'}`}
+                    aria-label={`Select ${car.name}, price ${riderPrice}`}
                   >
-                    <img src={car.image} className="w-full h-16 object-contain mb-3 group-hover:scale-110 transition-transform" />
+                    <img src={car.image} className="w-full h-16 object-contain mb-3 group-hover:scale-110 transition-transform" alt="" />
                     <p className="text-[10px] font-black uppercase text-slate-400 mb-1 truncate">{car.name}</p>
                     <div className="flex flex-col items-start">
                       <p className="text-lg font-black text-slate-900 leading-none">₹{riderPrice.toLocaleString()}</p>
                       <div className="flex items-center space-x-1.5 mt-1">
                         <span className="text-[9px] font-bold text-slate-300 line-through">₹{soloOriginal.toLocaleString()}</span>
-                        <span className="text-[9px] font-black text-green-500">{bookingDetails?.poolType !== PoolType.SOLO ? '40% OFF' : 'Best Rate'}</span>
+                        <span className="text-[9px] font-black text-green-500">{discountText}</span>
                       </div>
                     </div>
                   </button>
@@ -227,7 +236,10 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
               })}
             </div>
 
-            <button onClick={() => handleSelectCar(CAR_OPTIONS.find(c => c.id === selected)!)} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest transition-all active:bg-slate-800">
+            <button onClick={() => {
+              const car = CAR_OPTIONS.find(c => c.id === selected);
+              if (car) handleSelectCar(car);
+            }} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl uppercase tracking-widest transition-all active:bg-slate-800">
               <span>Show Price Breakdown</span>
             </button>
           </div>
@@ -237,7 +249,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
           <div className="py-10 text-center space-y-6">
             {bookingDetails?.poolType !== PoolType.SOLO ? (
               <div className="animate-in fade-in duration-500">
-                <div className="relative w-32 h-32 mx-auto mb-8">
+                <div className="relative w-32 h-32 mx-auto mb-8" role="timer" aria-label={`${poolTimer} seconds left`}>
                   <div className="absolute inset-0 border-[6px] border-slate-100 rounded-full"></div>
                   <div
                     className="absolute inset-0 border-[6px] border-yellow-400 rounded-full transition-all duration-1000"
@@ -251,16 +263,16 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
 
                 <div className="space-y-4">
                   <div className="flex justify-center -space-x-3 mb-4">
-                    {[...Array(passengerCount)].map((_, i) => (
-                      <div key={i} className="w-12 h-12 rounded-full border-4 border-white bg-slate-900 flex items-center justify-center text-lg animate-in zoom-in">👤</div>
+                    {new Array(passengerCount).fill(0).map((_, i) => (
+                      <div key={`rider-${i}`} className="w-12 h-12 rounded-full border-4 border-white bg-slate-900 flex items-center justify-center text-lg animate-in zoom-in" aria-hidden="true">👤</div>
                     ))}
-                    {[...Array(3 - passengerCount)].map((_, i) => (
-                      <div key={i} className="w-12 h-12 rounded-full border-4 border-white bg-slate-100 flex items-center justify-center text-lg text-slate-300 border-dashed">?</div>
+                    {new Array(Math.max(0, 3 - passengerCount)).fill(0).map((_, i) => (
+                      <div key={`empty-${i}`} className="w-12 h-12 rounded-full border-4 border-white bg-slate-100 flex items-center justify-center text-lg text-slate-300 border-dashed" aria-hidden="true">?</div>
                     ))}
                   </div>
 
                   <h2 className="text-2xl font-black text-slate-900 uppercase">
-                    {poolStatus === PoolStatus.WAITING ? 'Scanning for Riders...' : poolStatus === PoolStatus.FILLING ? 'Co-passenger Found!' : 'Dispatching Pool...'}
+                    {getPoolingStatusText()}
                   </h2>
                   <p className="text-slate-500 text-sm font-medium">
                     {passengerCount} of 3 passengers matched. <br />
@@ -272,7 +284,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
               <div className="space-y-6">
                 <div className="relative w-24 h-24 mx-auto">
                   <div className="absolute inset-0 border-8 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
-                  <div className="absolute inset-4 bg-slate-900 rounded-full flex items-center justify-center text-yellow-400">🛞</div>
+                  <div className="absolute inset-4 bg-slate-900 rounded-full flex items-center justify-center text-yellow-400" aria-hidden="true">🛞</div>
                 </div>
                 <h2 className="text-2xl font-black text-slate-900 uppercase">Finding Driver...</h2>
                 <p className="text-slate-500 text-sm">Securing your fixed outstation rate.</p>
@@ -286,10 +298,10 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
           <div className="space-y-6 pb-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-yellow-400 text-2xl shadow-lg">👨‍✈️</div>
+                <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-yellow-400 text-2xl shadow-lg" aria-hidden="true">👨‍✈️</div>
                 <div>
                   <h4 className="text-lg font-black text-slate-900 uppercase">
-                    {(bookingDetails?.status === 'IN_PROGRESS' || bookingDetails?.status === 'started') ? 'Trip Started' : 'Driver Assigned'}
+                    {activeTripStatus}
                   </h4>
                   <p className="text-xs font-bold text-slate-400">Locked Price: ₹{totals.rider.toLocaleString()}</p>
                 </div>
@@ -300,8 +312,19 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <button onClick={onPay} className="bg-yellow-400 py-4 rounded-2xl font-black text-xs uppercase text-slate-900 shadow-xl shadow-yellow-400/20 active:scale-95 transition-all">Pay Now via UPI</button>
-              <a href={`tel:${PHONE_NUMBER}`} className="bg-slate-100 py-4 rounded-2xl font-black text-xs uppercase text-slate-900 flex items-center justify-center active:scale-95 transition-all">Contact Driver</a>
+              <button
+                onClick={onPay}
+                className="bg-yellow-400 py-4 rounded-2xl font-black text-xs uppercase text-slate-900 shadow-xl shadow-yellow-400/20 active:scale-95 transition-all"
+              >
+                Pay Now via UPI
+              </button>
+              <a
+                href={`tel:${PHONE_NUMBER}`}
+                className="bg-slate-100 py-4 rounded-2xl font-black text-xs uppercase text-slate-900 flex items-center justify-center active:scale-95 transition-all"
+                aria-label="Call driver"
+              >
+                Contact Driver
+              </a>
             </div>
           </div>
         )}

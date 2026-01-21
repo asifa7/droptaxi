@@ -1,41 +1,68 @@
-
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Direct Taxi - Live Tracking</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <style>
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            overflow: hidden; 
+            overflow: hidden;
             background-color: #f1f5f9;
         }
+
         .bottom-sheet {
             transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         }
+
         .glass {
             background: rgba(255, 255, 255, 0.85);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
         }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        #map { background: #f8fafc; }
-        .leaflet-control-attribution { display: none !important; }
-        .leaflet-container { font-family: inherit; }
+
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        #map {
+            background: #f8fafc;
+        }
+
+        .leaflet-control-attribution {
+            display: none !important;
+        }
+
+        .leaflet-container {
+            font-family: inherit;
+        }
 
         @keyframes pulse-ring {
-            0% { transform: scale(.33); }
-            80%, 100% { opacity: 0; }
+            0% {
+                transform: scale(.33);
+            }
+
+            80%,
+            100% {
+                opacity: 0;
+            }
         }
+
         .pulse-marker {
             position: relative;
         }
+
         .pulse-marker::before {
             content: '';
             position: absolute;
@@ -52,11 +79,14 @@
         @media (max-height: 600px) {
             #booking-container {
                 padding-bottom: 0.5rem !important;
-                padding-top: 4rem !important; /* Leave room for header */
+                padding-top: 4rem !important;
+                /* Leave room for header */
             }
+
             .booking-card {
                 max-height: 70vh !important;
             }
+
             .booking-card form {
                 padding: 1rem !important;
                 gap: 0.75rem !important;
@@ -65,8 +95,10 @@
     </style>
 
 </head>
+
 <body class="bg-slate-100">
     <div id="root"></div>
     <script type="module" src="/src/index.tsx"></script>
 </body>
+
 </html>

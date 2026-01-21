@@ -15,29 +15,34 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
   const [comment, setComment] = useState('');
 
   const driverTags = [
-    "🕐 Punctual",
-    "🚗 Clean Vehicle",
-    "😊 Friendly",
-    "🛣️ Safe Driver",
-    "💬 Good Communication"
+    { text: "Punctual", icon: "🕐" },
+    { text: "Clean Vehicle", icon: "🚗" },
+    { text: "Friendly", icon: "😊" },
+    { text: "Safe Driver", icon: "🛣️" },
+    { text: "Good Communication", icon: "💬" }
   ];
 
   const passengerTags = [
-    "🕐 On Time",
-    "😊 Polite",
-    "💳 Payment Smooth",
-    "📍 Clear Directions"
+    { text: "On Time", icon: "🕐" },
+    { text: "Polite", icon: "😊" },
+    { text: "Payment Smooth", icon: "💳" },
+    { text: "Clear Directions", icon: "📍" }
   ];
 
-  const toggleTag = (tag: string) => {
+  const toggleTag = (tagText: string) => {
     setSelectedTags(prev =>
-      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+      prev.includes(tagText) ? prev.filter(t => t !== tagText) : [...prev, tagText]
     );
   };
 
   return (
     <div className="fixed inset-0 z-[8000] flex items-center justify-center p-6 animate-in fade-in duration-300">
-      <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl" onClick={onClose}></div>
+      <button
+        type="button"
+        className="absolute inset-0 bg-slate-900/90 backdrop-blur-xl w-full h-full cursor-default"
+        onClick={onClose}
+        aria-label="Close rating modal"
+      />
 
       <div className="relative w-full max-w-lg bg-white rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 duration-500 overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
@@ -65,6 +70,7 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
               onClick={() => setRating(star)}
               className={`text-5xl transition-all hover:scale-125 active:scale-90 ${star <= rating ? 'text-yellow-400 drop-shadow-lg' : 'text-slate-100'
                 }`}
+              aria-label={`${star} Stars`}
             >
               ★
             </button>
@@ -75,14 +81,15 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
         <div className="grid grid-cols-2 gap-3 mb-8">
           {(userRole === UserRole.USER ? driverTags : passengerTags).map(tag => (
             <button
-              key={tag}
-              onClick={() => toggleTag(tag)}
-              className={`p-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all border-2 ${selectedTags.includes(tag)
-                  ? 'bg-yellow-400 border-yellow-400 text-slate-900 shadow-lg'
-                  : 'bg-slate-50 border-slate-50 text-slate-500 hover:border-slate-200'
+              key={tag.text}
+              onClick={() => toggleTag(tag.text)}
+              className={`p-4 rounded-[1.5rem] text-[10px] font-black uppercase tracking-widest transition-all border-2 ${selectedTags.includes(tag.text)
+                ? 'bg-yellow-400 border-yellow-400 text-slate-900 shadow-lg'
+                : 'bg-slate-50 border-slate-50 text-slate-500 hover:border-slate-200'
                 }`}
             >
-              {tag}
+              <span role="img" aria-label={tag.text} className="mr-2">{tag.icon}</span>
+              {tag.text}
             </button>
           ))}
         </div>
@@ -93,6 +100,7 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             className="w-full p-6 rounded-[2rem] bg-slate-50 border-none font-bold text-slate-800 text-sm shadow-inner min-h-[100px] outline-none focus:ring-2 focus:ring-yellow-400 transition-all"
+            aria-label="Feedback comment"
           />
 
           <button

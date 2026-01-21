@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { RouteInsight, LatLng } from "./types";
 
 // Lazy initialize to prevent crash on load if key is missing

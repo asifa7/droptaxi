@@ -134,8 +134,8 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
 
         onSelect({
             address: cleanAddress,
-            lat: parseFloat(item.lat),
-            lng: parseFloat(item.lon)
+            lat: Number.parseFloat(item.lat),
+            lng: Number.parseFloat(item.lon)
         });
     };
 

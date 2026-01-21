@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { TripType, PoolType, BookingDetails, CarCategory, RouteInsight, LatLng, StopLocation, FavoriteLocation } from '../types';
+import { TripType, PoolType, BookingDetails, CarCategory, LatLng } from '../types';
 import { getTripInsights } from '../geminiService';
 import LocationAutocomplete from './LocationAutocomplete';
 
 interface BookingFormProps {
   isLoggedIn?: boolean;
   onComplete: (details: BookingDetails) => void;
-  onEnterPinMode: (field: 'from' | 'to' | string) => void;
+  onEnterPinMode: (field: 'from' | 'to') => void;
   externalPickup?: { name: string, coords: LatLng };
   externalDrop?: { name: string, coords: LatLng };
 }
@@ -37,7 +37,6 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
     carCategory: CarCategory.SEDAN
   });
 
-  const [insight, setInsight] = useState<RouteInsight | null>(null);
   const [isLoadingGeo, setIsLoadingGeo] = useState(false);
 
   useEffect(() => {
@@ -93,8 +92,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
   const handleInsightFetch = async () => {
     if (details.from && details.to) {
       try {
-        const res = await getTripInsights(details.from, details.to);
-        setInsight(res);
+        await getTripInsights(details.from, details.to);
       } catch (e) {
         console.warn("AI insights failed:", e);
       }
@@ -112,19 +110,20 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
       {/* Top Pool/Solo Selector - More compact */}
       <div className="bg-[#0f172a] p-2 flex gap-2">
         {[
-          { id: PoolType.SOLO, label: 'Solo', icon: '👤' },
-          { id: PoolType.INTERCITY_POOL, label: 'Intercity Pool', icon: '👥' }
+          { id: PoolType.SOLO, label: 'Solo', icon: '👤', aria: 'Solo Ride' },
+          { id: PoolType.INTERCITY_POOL, label: 'Intercity Pool', icon: '👥', aria: 'Intercity Pool Ride' }
         ].map(mode => (
           <button
             key={mode.id}
             type="button"
             onClick={() => setDetails({ ...details, poolType: mode.id === PoolType.SOLO ? PoolType.SOLO : PoolType.INTERCITY_POOL })}
+            aria-label={mode.aria}
             className={`flex-1 py-2.5 rounded-[1.2rem] flex items-center justify-center space-x-2 transition-all duration-300 ${(details.poolType === PoolType.SOLO && mode.id === PoolType.SOLO) || (details.poolType !== PoolType.SOLO && mode.id === PoolType.INTERCITY_POOL)
               ? 'bg-yellow-400 text-slate-900 shadow-md'
               : 'text-slate-500 hover:text-slate-300'
               }`}
           >
-            <span className="text-xs">{mode.icon}</span>
+            <span className="text-xs" role="img" aria-hidden="true">{mode.icon}</span>
             <span className="text-[10px] font-black uppercase tracking-widest">{mode.label}</span>
           </button>
         ))}
@@ -162,24 +161,25 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1 flex-1 min-w-0">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Date</label>
+            <label htmlFor="booking-date" className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Date</label>
             <div className="relative">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-[10px]">📅</div>
-              <input type="date" value={details.date} onChange={(e) => setDetails({ ...details, date: e.target.value })} className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8fafc] border border-slate-100 font-bold text-slate-800 text-xs shadow-sm focus:bg-white focus:ring-1 focus:ring-slate-900 outline-none appearance-none" />
+              <input id="booking-date" type="date" value={details.date} onChange={(e) => setDetails({ ...details, date: e.target.value })} className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8fafc] border border-slate-100 font-bold text-slate-800 text-xs shadow-sm focus:bg-white focus:ring-1 focus:ring-slate-900 outline-none appearance-none" />
             </div>
           </div>
           <div className="space-y-1 flex-1 min-w-0">
-            <label className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Time</label>
+            <label htmlFor="booking-time" className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Time</label>
             <div className="relative">
               <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-[10px]">🕒</div>
-              <input type="time" value={details.time} onChange={(e) => setDetails({ ...details, time: e.target.value })} className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8fafc] border border-slate-100 font-bold text-slate-800 text-xs shadow-sm focus:bg-white focus:ring-1 focus:ring-slate-900 outline-none appearance-none" />
+              <input id="booking-time" type="time" value={details.time} onChange={(e) => setDetails({ ...details, time: e.target.value })} className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8fafc] border border-slate-100 font-bold text-slate-800 text-xs shadow-sm focus:bg-white focus:ring-1 focus:ring-slate-900 outline-none appearance-none" />
             </div>
           </div>
         </div>
 
         <div className="space-y-1">
-          <label className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Mobile (For Tracking)</label>
+          <label htmlFor="booking-phone" className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Mobile (For Tracking)</label>
           <input
+            id="booking-phone"
             type="tel"
             required
             placeholder="9876543210"

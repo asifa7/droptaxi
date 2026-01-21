@@ -49,7 +49,7 @@ const UberMap: React.FC<UberMapProps> = ({ pickup, destination, driverLoc, appSt
 
   useEffect(() => {
     if (center && mapInstance.current && typeof center.lat === 'number') {
-        mapInstance.current.setView([center.lat, center.lng], 16, { animate: true });
+      mapInstance.current.setView([center.lat, center.lng], 16, { animate: true });
     }
   }, [center]);
 
@@ -108,30 +108,32 @@ const UberMap: React.FC<UberMapProps> = ({ pickup, destination, driverLoc, appSt
           const data = await response.json();
           if (data.routes && data.routes.length > 0) {
             const coordinates = data.routes[0].geometry.coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
-            
+
             if (routeLayer.current) routeLayer.current.remove();
-            
-            routeLayer.current = L.polyline(coordinates as any, {
+
+            routeLayer.current = L.polyline(coordinates, {
               color: '#000',
               weight: 5,
               opacity: 1,
               lineJoin: 'round'
-            }).addTo(mapInstance.current!);
+            }).addTo(mapInstance.current);
 
-            if (!center) {
-              mapInstance.current!.fitBounds(routeLayer.current.getBounds(), { padding: [80, 200] });
+            if (!center && mapInstance.current) {
+              mapInstance.current.fitBounds(routeLayer.current.getBounds(), { padding: [80, 200] });
             }
           }
         } catch (error) {
           console.error("Routing error:", error);
           // Fallback to straight line if OSRM fails
-          const path = [[pickup.lat, pickup.lng], [destination.lat, destination.lng]];
-          routeLayer.current = L.polyline(path as any, {
-            color: '#000',
-            weight: 4,
-            opacity: 0.9,
-            lineJoin: 'round'
-          }).addTo(mapInstance.current!);
+          const path = [[pickup.lat, pickup.lng], [destination.lat, destination.lng]] as [number, number][];
+          if (mapInstance.current) {
+            routeLayer.current = L.polyline(path, {
+              color: '#000',
+              weight: 4,
+              opacity: 0.9,
+              lineJoin: 'round'
+            }).addTo(mapInstance.current);
+          }
         }
       };
 
@@ -142,9 +144,9 @@ const UberMap: React.FC<UberMapProps> = ({ pickup, destination, driverLoc, appSt
   }, [pickup, destination, driverLoc, appState, center]);
 
   return (
-    <div 
-      ref={mapRef} 
-      id="map" 
+    <div
+      ref={mapRef}
+      id="map"
       className="w-full h-full absolute inset-0 z-0 bg-slate-100"
     />
   );
