@@ -143,6 +143,13 @@ const App: React.FC = () => {
     };
   };
 
+  const updateBookingStatus = useCallback((status: string, driverPhone?: string) => {
+    setBooking(prev => {
+      if (!prev) return null;
+      return { ...prev, status, driverPhone: driverPhone || prev.driverPhone };
+    });
+  }, []);
+
   // Polling for Booking Status (Rider Side)
   useEffect(() => {
     let interval: any;
@@ -151,13 +158,13 @@ const App: React.FC = () => {
         if (!isSupabaseConfigured()) return;
         try {
           const statusData = await supabaseService.getBookingStatus(booking.id!);
-          if (statusData.status === 'COMPLETED' || statusData.status === 'completed') {
-            setBooking(prev => prev ? { ...prev, status: 'COMPLETED' } : null);
-            setAppState(AppState.RATING); // Or ARRIVED, but RATING is good for completion
-          } else if (statusData.status === 'DRIVER_ACCEPTED' || statusData.status === 'accepted' || statusData.status === 'IN_PROGRESS') {
-            setBooking(prev => prev ? { ...prev, status: statusData.status, driverPhone: statusData.driver_phone } : null);
+          const status = statusData.status;
+          if (status === 'COMPLETED' || status === 'completed') {
+            updateBookingStatus('COMPLETED');
+            setAppState(AppState.RATING);
+          } else if (status === 'DRIVER_ACCEPTED' || status === 'accepted' || status === 'IN_PROGRESS') {
+            updateBookingStatus(status, statusData.driver_phone);
             setAppState(AppState.TRIP_ACTIVE);
-            // Simulate driver location nearby
             if (booking.fromCoords) {
               setDriverLoc({ lat: booking.fromCoords.lat + 0.002, lng: booking.fromCoords.lng + 0.002 });
             }
@@ -167,13 +174,12 @@ const App: React.FC = () => {
         }
       }, 4000);
     } else if (role === UserRole.USER && appState === AppState.TRIP_ACTIVE && booking?.id) {
-      // Poll for completion
       interval = setInterval(async () => {
         if (!isSupabaseConfigured()) return;
         try {
           const statusData = await supabaseService.getBookingStatus(booking.id!);
           if (statusData.status === 'COMPLETED' || statusData.status === 'completed') {
-            setBooking(prev => prev ? { ...prev, status: 'COMPLETED' } : null);
+            updateBookingStatus('COMPLETED');
             setAppState(AppState.RATING);
           }
         } catch (err) {
@@ -189,31 +195,46 @@ const App: React.FC = () => {
 
 
 
-  const handleBookingChange = useCallback((payload: any) => {
-    const newRide: any = payload.new;
-    if (role === UserRole.DRIVER) {
-      if (payload.eventType === 'INSERT' && newRide.status === 'pending') {
-        setRidePool(prev => [enhanceTripData(newRide), ...prev]);
-      } else if (payload.eventType === 'UPDATE') {
-        if (newRide.status === 'pending') {
-          setRidePool(prev => prev.map(r => r.id === newRide.id ? enhanceTripData(newRide) : r));
-        } else {
-          setRidePool(prev => prev.filter(r => r.id !== newRide.id));
-        }
-      }
+  const handleDriverBookingUpdate = useCallback((payload: any, newRide: any) => {
+    const isPending = newRide.status === 'pending';
+
+    if (payload.eventType === 'INSERT' && isPending) {
+      setRidePool(prev => [enhanceTripData(newRide), ...prev]);
+      return;
     }
 
-    if (role === UserRole.USER && booking && newRide?.id === booking.id) {
-      if (newRide.status === 'completed') {
-        setAppState(AppState.RATING);
-      } else if (newRide.status === 'accepted') {
-        setAppState(AppState.TRIP_ACTIVE);
-        if (newRide.from_lat && newRide.from_lng) {
-          setDriverLoc({ lat: newRide.from_lat + 0.002, lng: newRide.from_lng + 0.002 });
-        }
+    if (payload.eventType === 'UPDATE') {
+      setRidePool(prev => isPending
+        ? prev.map(r => r.id === newRide.id ? enhanceTripData(newRide) : r)
+        : prev.filter(r => r.id !== newRide.id)
+      );
+    }
+  }, [enhanceTripData]);
+
+  const handleUserBookingUpdate = useCallback((newRide: any) => {
+    if (newRide.status === 'completed') {
+      setAppState(AppState.RATING);
+      return;
+    }
+
+    if (newRide.status === 'accepted') {
+      setAppState(AppState.TRIP_ACTIVE);
+      if (newRide.from_lat && newRide.from_lng) {
+        setDriverLoc({ lat: newRide.from_lat + 0.002, lng: newRide.from_lng + 0.002 });
       }
     }
-  }, [role, booking]);
+  }, []);
+
+  const handleBookingChange = useCallback((payload: any) => {
+    const newRide: any = payload.new;
+    if (!newRide) return;
+
+    if (role === UserRole.DRIVER) {
+      handleDriverBookingUpdate(payload, newRide);
+    } else if (role === UserRole.USER && booking && newRide.id === booking.id) {
+      handleUserBookingUpdate(newRide);
+    }
+  }, [role, booking, handleDriverBookingUpdate, handleUserBookingUpdate]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -374,6 +395,10 @@ const App: React.FC = () => {
     setRidePool(prev => prev.filter(r => r.id !== ride.id));
   };
 
+  const cleanupRideFromPool = useCallback((rideId: string) => {
+    setRidePool(prev => prev.filter(r => r.id !== rideId));
+  }, []);
+
   const handleCompleteRide = async (ride: BookingDetails) => {
     if (!ride.id) return;
     try {
@@ -381,9 +406,8 @@ const App: React.FC = () => {
         await supabaseService.completeRide(ride.id, ride.fareAmount || 0, ride.distanceKm || 0);
         setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: 'COMPLETED' } : r));
 
-        setTimeout(() => {
-          setRidePool(p => p.filter(r => r.id !== ride.id));
-        }, 5000);
+        const rideIdToCleanup = ride.id;
+        setTimeout(() => cleanupRideFromPool(rideIdToCleanup), 5000);
       } else {
         setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: 'COMPLETED' } : r));
       }

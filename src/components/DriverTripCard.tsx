@@ -81,11 +81,11 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
         <div className="border-l-2 border-dashed border-slate-200 ml-[5px] pl-6 py-4 my-1">
           <div className="bg-slate-50 p-2 rounded-xl inline-block">
             <p className="text-[10px] text-slate-500 font-bold flex items-center">
-              <span className="mr-2">🛣️</span> {trip.routePreview || 'NH-44 → Highway Route'}
+              <span className="mr-2" aria-hidden="true">🛣️</span> {trip.routePreview || 'NH-44 → Highway Route'}
             </p>
           </div>
           <p className="text-[10px] text-slate-400 font-bold mt-2">
-            🕐 {duration} • {distance} km Total
+            <span aria-hidden="true">🕐</span> {duration} • {distance} km Total
           </p>
         </div>
 
@@ -101,13 +101,13 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
         <div className="flex items-center justify-between mb-5 bg-yellow-50/50 p-3 rounded-2xl border border-yellow-100">
           <div className="flex items-center space-x-2">
             <div className="flex -space-x-2">
-              {new Array(Math.min(3, trip.poolCount || 1)).fill(0).map((_, i) => (
-                <div key={`matched-${i}`} className="w-8 h-8 bg-slate-900 rounded-full border-2 border-white flex items-center justify-center text-xs shadow-sm">
+              {[1, 2, 3].slice(0, Math.min(3, trip.poolCount || 1)).map(slot => (
+                <div key={`active-pool-${slot}`} className="w-8 h-8 bg-slate-900 rounded-full border-2 border-white flex items-center justify-center text-xs shadow-sm" aria-hidden="true">
                   👤
                 </div>
               ))}
-              {new Array(Math.max(0, 3 - (trip.poolCount || 1))).fill(0).map((_, i) => (
-                <div key={`empty-${i}`} className="w-8 h-8 bg-slate-200 rounded-full border-2 border-white flex items-center justify-center text-[8px] text-slate-400 font-black">
+              {[1, 2, 3].slice(0, Math.max(0, 3 - (trip.poolCount || 1))).map(slot => (
+                <div key={`empty-pool-${slot}`} className="w-8 h-8 bg-slate-200 rounded-full border-2 border-white flex items-center justify-center text-[8px] text-slate-400 font-black" aria-hidden="true">
                   ?
                 </div>
               ))}
@@ -172,7 +172,7 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
       {trip.returnViability && (
         <div className="mt-4 bg-blue-50 p-3 rounded-2xl text-center border border-blue-100 animate-in slide-in-from-top-1">
           <p className="text-[9px] font-black text-blue-700 uppercase tracking-tighter">
-            🔄 High probability of return trip from this location
+            <span aria-hidden="true">🔄</span> High probability of return trip from this location
           </p>
         </div>
       )}

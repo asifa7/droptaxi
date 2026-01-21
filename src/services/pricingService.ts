@@ -1,5 +1,5 @@
 import { supabaseService } from '../supabaseClient';
-import { CarCategory, TripType } from '../types';
+import { CarCategory } from '../types';
 import { CAR_OPTIONS, COMMISSION_RATE } from '../constants';
 
 export interface PricingConfig {
@@ -48,7 +48,7 @@ export class PricingEngine {
             ratePerKmIntercity: 12,
             ratePerMin: 2,
             nightMultiplier: 1.2,
-            surgeMultiplier: 1.0,
+            surgeMultiplier: 1,
             waitingRate: 2,
             cityRadiusKm: 50
         },
@@ -59,7 +59,7 @@ export class PricingEngine {
             ratePerKmIntercity: 16,
             ratePerMin: 3,
             nightMultiplier: 1.2,
-            surgeMultiplier: 1.0,
+            surgeMultiplier: 1,
             waitingRate: 2,
             cityRadiusKm: 50
         },
@@ -70,7 +70,7 @@ export class PricingEngine {
             ratePerKmIntercity: 25,
             ratePerMin: 5,
             nightMultiplier: 1.3,
-            surgeMultiplier: 1.0,
+            surgeMultiplier: 1,
             waitingRate: 5,
             cityRadiusKm: 50
         },
@@ -81,7 +81,7 @@ export class PricingEngine {
             ratePerKmIntercity: 30,
             ratePerMin: 5,
             nightMultiplier: 1.2,
-            surgeMultiplier: 1.0,
+            surgeMultiplier: 1,
             waitingRate: 5,
             cityRadiusKm: 50
         }
@@ -150,7 +150,7 @@ export class PricingEngine {
         distanceKm: number,
         durationMins: number,
         tripDate: Date,
-        surgeMulti = 1.0,
+        surgeMulti = 1,
         waitingMins = 0
     ): FareResult {
         // init if not done
@@ -165,7 +165,7 @@ export class PricingEngine {
         const ratePerKm = isIntercityRide ? config.ratePerKmIntercity : config.ratePerKmCity;
 
         const isNight = this.checkNightTime(tripDate);
-        const nightMulti = isNight ? config.nightMultiplier : 1.0;
+        const nightMulti = isNight ? config.nightMultiplier : 1;
 
         const base = config.baseFare;
         const distCost = distanceKm * ratePerKm;
@@ -195,7 +195,7 @@ export class PricingEngine {
             nightAmount: Math.round(nightAmount),
             waitingAmount: Math.round(waitCost),
             currency: 'INR',
-            isSurgeApplied: surgeMulti > 1.0,
+            isSurgeApplied: surgeMulti > 1,
             isNightApplied: isNight,
             distanceKm,
             durationMins,

@@ -117,7 +117,7 @@ const AgentWallet: React.FC<AgentWalletProps> = ({ profile, onWithdraw, onClose 
                                  <div key={tx.id} className="p-4 bg-slate-50 rounded-3xl flex items-center justify-between group hover:bg-white border border-slate-50 hover:border-slate-100 transition-all">
                                     <div className="flex items-center space-x-4">
                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm ${getTransactionStyle(tx.type)}`}>
-                                          {getTransactionIcon(tx.type)}
+                                          <span aria-hidden="true">{getTransactionIcon(tx.type)}</span>
                                        </div>
                                        <div>
                                           <p className="text-xs font-black text-slate-900 truncate max-w-[150px]">{tx.description}</p>

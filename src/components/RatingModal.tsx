@@ -88,7 +88,7 @@ const RatingModal: React.FC<RatingModalProps> = ({ booking, userRole, onSubmit, 
                 : 'bg-slate-50 border-slate-50 text-slate-500 hover:border-slate-200'
                 }`}
             >
-              <span role="img" aria-label={tag.text} className="mr-2">{tag.icon}</span>
+              <span aria-hidden="true" className="mr-2">{tag.icon}</span>
               {tag.text}
             </button>
           ))}

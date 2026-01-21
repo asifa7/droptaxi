@@ -43,42 +43,44 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
     detectCurrentLocation();
   }, []);
 
-  const detectCurrentLocation = () => {
-    if (navigator.geolocation) {
-      setIsLoadingGeo(true);
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000);
+  const fetchLocationName = async (lat: number, lon: number) => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-          const res = await fetch(`https://photon.komoot.io/reverse?lon=${pos.coords.longitude}&lat=${pos.coords.latitude}`, {
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
+      const res = await fetch(`https://photon.komoot.io/reverse?lon=${lon}&lat=${lat}`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
 
-          if (!res.ok) throw new Error('Network response was not ok');
+      if (!res.ok) throw new Error('Network response was not ok');
 
-          const data = await res.json();
-          const place = data.features[0]?.properties;
-          const name = place?.name || place?.street || place?.city || "Current Location";
-          setDetails(prev => {
-            if (prev.from) return prev; // Don't overwrite if user typed already
-            return { ...prev, from: name, fromCoords: { lat: pos.coords.latitude, lng: pos.coords.longitude } };
-          });
-        } catch (e: any) {
-          console.warn("Location name lookup skipped:", e.message);
-          setDetails(prev => {
-            if (prev.from) return prev; // Don't overwrite if user typed already
-            return { ...prev, from: "Current Location", fromCoords: { lat: pos.coords.latitude, lng: pos.coords.longitude } };
-          });
-        } finally {
-          setIsLoadingGeo(false);
-        }
-      }, (err) => {
-        console.warn("Geolocation permission denied or timed out:", err.message);
-        setIsLoadingGeo(false);
-      }, { timeout: 10000 });
+      const data = await res.json();
+      const place = data.features[0]?.properties;
+      return place?.name || place?.street || place?.city || "Current Location";
+    } catch (e: any) {
+      console.warn("Location name lookup skipped:", e.message);
+      return "Current Location";
     }
+  };
+
+  const detectCurrentLocation = () => {
+    if (!navigator.geolocation) return;
+
+    setIsLoadingGeo(true);
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      const { latitude: lat, longitude: lon } = pos.coords;
+      const name = await fetchLocationName(lat, lon);
+
+      setDetails(prev => {
+        if (prev.from) return prev;
+        return { ...prev, from: name, fromCoords: { lat, lng: lon } };
+      });
+      setIsLoadingGeo(false);
+    }, (err) => {
+      console.warn("Geolocation denied or timed out:", err.message);
+      setIsLoadingGeo(false);
+    }, { timeout: 10000 });
   };
 
   useEffect(() => {
@@ -123,7 +125,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
               : 'text-slate-500 hover:text-slate-300'
               }`}
           >
-            <span className="text-xs" role="img" aria-hidden="true">{mode.icon}</span>
+            <span className="text-xs" aria-hidden="true">{mode.icon}</span>
             <span className="text-[10px] font-black uppercase tracking-widest">{mode.label}</span>
           </button>
         ))}
@@ -139,7 +141,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
             className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#f8fafc] focus:bg-white focus:ring-1 focus:ring-slate-900 transition-all outline-none font-bold text-slate-800 text-xs shadow-sm border border-slate-100 placeholder:font-normal"
             leftIcon={<div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-900 font-bold text-sm z-10">○</div>}
             rightIcon={
-              <button type="button" onClick={() => onEnterPinMode('from')} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#ec4899] text-xs hover:scale-110 z-10">📍</button>
+              <button type="button" onClick={() => onEnterPinMode('from')} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#ec4899] text-xs hover:scale-110 z-10" aria-label="Set from pin"><span aria-hidden="true">📍</span></button>
             }
           />
 
@@ -154,7 +156,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
             className="w-full pl-10 pr-10 py-3 rounded-xl bg-[#f8fafc] focus:bg-white focus:ring-1 focus:ring-slate-900 transition-all outline-none font-bold text-slate-800 text-xs shadow-sm border border-slate-100 placeholder:font-normal"
             leftIcon={<div className="absolute left-4 top-1/2 -translate-y-1/2 w-2 h-2 bg-slate-900 z-10"></div>}
             rightIcon={
-              <button type="button" onClick={() => onEnterPinMode('to')} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#ec4899] text-xs hover:scale-110 z-10">📍</button>
+              <button type="button" onClick={() => onEnterPinMode('to')} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#ec4899] text-xs hover:scale-110 z-10" aria-label="Set to pin"><span aria-hidden="true">📍</span></button>
             }
           />
         </div>
@@ -163,14 +165,14 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
           <div className="space-y-1 flex-1 min-w-0">
             <label htmlFor="booking-date" className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Date</label>
             <div className="relative">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-[10px]">📅</div>
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-[10px]" aria-hidden="true">📅</div>
               <input id="booking-date" type="date" value={details.date} onChange={(e) => setDetails({ ...details, date: e.target.value })} className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8fafc] border border-slate-100 font-bold text-slate-800 text-xs shadow-sm focus:bg-white focus:ring-1 focus:ring-slate-900 outline-none appearance-none" />
             </div>
           </div>
           <div className="space-y-1 flex-1 min-w-0">
             <label htmlFor="booking-time" className="text-[8px] font-black uppercase text-slate-400 ml-1 tracking-widest">Time</label>
             <div className="relative">
-              <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-[10px]">🕒</div>
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none text-[10px]" aria-hidden="true">🕒</div>
               <input id="booking-time" type="time" value={details.time} onChange={(e) => setDetails({ ...details, time: e.target.value })} className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#f8fafc] border border-slate-100 font-bold text-slate-800 text-xs shadow-sm focus:bg-white focus:ring-1 focus:ring-slate-900 outline-none appearance-none" />
             </div>
           </div>

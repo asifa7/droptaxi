@@ -25,6 +25,8 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
   const [poolTimer, setPoolTimer] = useState(90);
   const [passengerCount, setPassengerCount] = useState(1);
 
+  const isPool = bookingDetails?.poolType !== PoolType.SOLO;
+
   useEffect(() => {
     const fetchDist = async () => {
       if (bookingDetails?.fromCoords && bookingDetails?.toCoords) {
@@ -47,7 +49,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (appState === AppState.SEARCHING_DRIVER && bookingDetails?.poolType !== PoolType.SOLO) {
+    if (appState === AppState.SEARCHING_DRIVER && isPool) {
       setPoolStatus(PoolStatus.WAITING);
       interval = setInterval(() => {
         setPoolTimer((prev) => {
@@ -74,7 +76,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [appState, bookingDetails?.poolType]);
+  }, [appState, isPool]);
 
   const calculateTotal = (car: CarOption) => {
     if (!bookingDetails) return 0;
@@ -91,7 +93,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
 
     let finalFare = fareResult.totalFare;
 
-    if (bookingDetails.poolType !== PoolType.SOLO) {
+    if (isPool) {
       finalFare = Math.round(finalFare * 0.6);
     }
     return finalFare;
@@ -113,7 +115,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
         allowance: car.driverAllowance
       }
     };
-  }, [selected, distanceKm, bookingDetails?.tripType, bookingDetails?.poolType, bookingDetails?.date, bookingDetails?.time]);
+  }, [selected, distanceKm, bookingDetails?.tripType, isPool, bookingDetails?.date, bookingDetails?.time]);
 
   const handleSelectCar = (car: CarOption) => {
     setSelected(car.id as unknown as CarCategory);
@@ -121,8 +123,8 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
     setShowModal(true);
   };
 
-  const poolTitle = bookingDetails?.poolType === PoolType.SOLO ? 'Solo Travel' : 'Shared Pool Travel';
-  const confirmText = `Confirm ${bookingDetails?.poolType !== PoolType.SOLO ? 'Pool' : 'Solo'} Ride`;
+  const poolTitle = isPool ? 'Shared Pool Travel' : 'Solo Travel';
+  const confirmText = `Confirm ${isPool ? 'Pool' : 'Solo'} Ride`;
   const bookingModeLabel = bookingDetails?.poolType.replaceAll('_', ' ');
 
   const getPoolingStatusText = () => {
@@ -172,7 +174,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                   <div className="flex items-center justify-between p-3 bg-white rounded-2xl border-2 border-yellow-400 shadow-sm">
                     <div className="flex items-center space-x-3">
                       <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-yellow-400 text-xs" aria-hidden="true">🛞</div>
-                      <span className="font-black text-sm text-slate-900">Agent {bookingDetails?.poolType !== PoolType.SOLO ? 'Pool' : 'Taxi'}</span>
+                      <span className="font-black text-sm text-slate-900">Agent {isPool ? 'Pool' : 'Taxi'}</span>
                     </div>
                     <span className="font-black text-slate-900">₹{totals.rider.toLocaleString()}</span>
                   </div>
@@ -213,7 +215,8 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                 const isSelected = selected === car.id;
                 const riderPrice = calculateTotal(car);
                 const soloOriginal = (Math.max(distanceKm, car.oneWayMinKm) * car.oneWayPrice) + car.driverAllowance;
-                const discountText = bookingDetails?.poolType !== PoolType.SOLO ? '40% OFF' : 'Best Rate';
+                const isSolo = bookingDetails?.poolType === PoolType.SOLO;
+                const discountText = isSolo ? 'Best Rate' : '40% OFF';
 
                 return (
                   <button
@@ -222,7 +225,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                     className={`flex-shrink-0 w-44 p-4 rounded-[2.2rem] border-4 transition-all relative overflow-hidden group ${isSelected ? 'border-yellow-400 bg-yellow-50 shadow-xl scale-105' : 'border-slate-50 bg-white opacity-90'}`}
                     aria-label={`Select ${car.name}, price ${riderPrice}`}
                   >
-                    <img src={car.image} className="w-full h-16 object-contain mb-3 group-hover:scale-110 transition-transform" alt="" />
+                    <img src={car.image} className="w-full h-16 object-contain mb-3 group-hover:scale-110 transition-transform" alt={car.name} />
                     <p className="text-[10px] font-black uppercase text-slate-400 mb-1 truncate">{car.name}</p>
                     <div className="flex flex-col items-start">
                       <p className="text-lg font-black text-slate-900 leading-none">₹{riderPrice.toLocaleString()}</p>
@@ -247,7 +250,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
 
         {appState === AppState.SEARCHING_DRIVER && (
           <div className="py-10 text-center space-y-6">
-            {bookingDetails?.poolType !== PoolType.SOLO ? (
+            {isPool ? (
               <div className="animate-in fade-in duration-500">
                 <div className="relative w-32 h-32 mx-auto mb-8" role="timer" aria-label={`${poolTimer} seconds left`}>
                   <div className="absolute inset-0 border-[6px] border-slate-100 rounded-full"></div>
@@ -263,11 +266,11 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
 
                 <div className="space-y-4">
                   <div className="flex justify-center -space-x-3 mb-4">
-                    {new Array(passengerCount).fill(0).map((_, i) => (
-                      <div key={`rider-${i}`} className="w-12 h-12 rounded-full border-4 border-white bg-slate-900 flex items-center justify-center text-lg animate-in zoom-in" aria-hidden="true">👤</div>
+                    {[1, 2, 3].slice(0, passengerCount).map(idx => (
+                      <div key={`rider-slot-${idx}`} className="w-12 h-12 rounded-full border-4 border-white bg-slate-900 flex items-center justify-center text-lg animate-in zoom-in" aria-hidden="true">👤</div>
                     ))}
-                    {new Array(Math.max(0, 3 - passengerCount)).fill(0).map((_, i) => (
-                      <div key={`empty-${i}`} className="w-12 h-12 rounded-full border-4 border-white bg-slate-100 flex items-center justify-center text-lg text-slate-300 border-dashed" aria-hidden="true">?</div>
+                    {[1, 2, 3].slice(0, Math.max(0, 3 - passengerCount)).map(idx => (
+                      <div key={`empty-slot-${idx}`} className="w-12 h-12 rounded-full border-4 border-white bg-slate-100 flex items-center justify-center text-lg text-slate-300 border-dashed" aria-hidden="true">?</div>
                     ))}
                   </div>
 

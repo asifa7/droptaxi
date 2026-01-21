@@ -130,132 +130,132 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
     return 'Ready to Ride';
   };
 
-  const renderContent = () => {
-    if (isLoginFlow) {
-      return (
-        <div className="animate-in slide-in-from-right duration-300 space-y-6">
-          <button onClick={() => setIsLoginFlow(false)} className="text-slate-400 font-bold text-[10px] uppercase flex items-center hover:text-slate-900">
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-            Back to Menu
-          </button>
-          <h3 className="text-2xl font-black text-slate-900 uppercase">Sign In</h3>
-          {criticalError && (
-            <p className="p-3 bg-red-50 text-red-500 text-xs font-bold rounded-xl animate-in fade-in">
-              {criticalError.message}
-            </p>
-          )}
-          {loginStep === 'PHONE' ? (
-            <form onSubmit={handleSendOTP} className="space-y-4">
-              <div className="space-y-1">
-                <label htmlFor="login-phone" className="text-[9px] font-black uppercase text-slate-400 ml-2">Mobile Number</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm" aria-hidden="true">+91</span>
-                  <input id="login-phone" required type="tel" maxLength={10} value={phone} onChange={e => setPhone(e.target.value.replaceAll(/\D/g, ''))} className="w-full bg-white border border-slate-200 rounded-2xl p-4 pl-14 font-black" placeholder="9876543210" />
-                </div>
-              </div>
-              <button disabled={isLoading} type="submit" className="w-full bg-slate-900 text-yellow-400 font-black py-4 rounded-2xl shadow-xl uppercase text-[11px] tracking-widest">
-                {isLoading ? '...' : 'Send OTP'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOTP} className="space-y-4">
-              <input id="login-otp" required type="text" maxLength={6} value={otp} onChange={e => setOtp(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-center text-3xl font-black tracking-[0.5em]" placeholder="••••••" aria-label="Enter 6-digit OTP" />
-              <button type="submit" disabled={isLoading} className="w-full bg-yellow-400 text-slate-900 font-black py-4 rounded-2xl shadow-xl uppercase text-[11px] tracking-widest">
-                {isLoading ? 'Verifying...' : 'Verify & Login'}
-              </button>
-            </form>
-          )}
-          <button onClick={handleDemoBypass} className="w-full text-[10px] font-black text-slate-400 uppercase tracking-widest">Try Demo Mode</button>
-        </div>
-      );
-    }
-
-    if (isRegisteringAgent) {
-      return (
-        <div className="animate-in slide-in-from-right duration-300">
-          <button onClick={() => setIsRegisteringAgent(false)} className="text-slate-400 font-bold text-[10px] uppercase mb-6 flex items-center">
-            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-            Back to Menu
-          </button>
-          <h3 className="text-xl font-black text-slate-900 uppercase mb-6">Agent Signup</h3>
-          <form onSubmit={handleAgentSubmit} className="space-y-4">
-            <input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-black" placeholder="Full Name" />
-            <input required value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-black" placeholder="Mobile" />
-            <input required value={formData.vNum} onChange={e => setFormData({ ...formData, vNum: e.target.value })} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-black" placeholder="Vehicle No (TN 01 AT 1234)" />
-            <input required value={formData.vModel} onChange={e => setFormData({ ...formData, vModel: e.target.value })} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-black" placeholder="Vehicle Model" />
-            <button type="submit" className="w-full bg-slate-900 text-yellow-400 font-black py-4 rounded-2xl shadow-xl uppercase text-[11px] tracking-widest mt-4">Start Earning</button>
-          </form>
-        </div>
-      );
-    }
-
-    return (
-      <>
-        {currentRole === UserRole.DRIVER && (
-          <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-            <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Finance</h3>
-            <div className="bg-white rounded-[2rem] p-2 shadow-sm border border-slate-100">
-              <button onClick={onOpenWallet} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-yellow-50 transition-colors group">
-                <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 rounded-xl bg-yellow-100 text-yellow-600 flex items-center justify-center" aria-hidden="true">👛</div>
-                  <span className="font-bold text-slate-800 text-sm">My Wallet & Payouts</span>
-                </div>
-                <svg className="w-4 h-4 text-slate-300 group-hover:text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-              </button>
+  const renderLoginForm = () => (
+    <div className="animate-in slide-in-from-right duration-300 space-y-6">
+      <button onClick={() => setIsLoginFlow(false)} className="text-slate-400 font-bold text-[10px] uppercase flex items-center hover:text-slate-900">
+        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+        Back to Menu
+      </button>
+      <h3 className="text-2xl font-black text-slate-900 uppercase">Sign In</h3>
+      {criticalError && (
+        <p className="p-3 bg-red-50 text-red-500 text-xs font-bold rounded-xl animate-in fade-in">
+          {criticalError.message}
+        </p>
+      )}
+      {loginStep === 'PHONE' ? (
+        <form onSubmit={handleSendOTP} className="space-y-4">
+          <div className="space-y-1">
+            <label htmlFor="login-phone" className="text-[9px] font-black uppercase text-slate-400 ml-2">Mobile Number</label>
+            <div className="relative">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-slate-400 text-sm" aria-hidden="true">+91</span>
+              <input id="login-phone" required type="tel" maxLength={10} value={phone} onChange={e => setPhone(e.target.value.replaceAll(/\D/g, ''))} className="w-full bg-white border border-slate-200 rounded-2xl p-4 pl-14 font-black" placeholder="9876543210" />
             </div>
           </div>
-        )}
+          <button disabled={isLoading} type="submit" className="w-full bg-slate-900 text-yellow-400 font-black py-4 rounded-2xl shadow-xl uppercase text-[11px] tracking-widest">
+            {isLoading ? '...' : 'Send OTP'}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleVerifyOTP} className="space-y-4">
+          <input id="login-otp" required type="text" maxLength={6} value={otp} onChange={e => setOtp(e.target.value)} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-center text-3xl font-black tracking-[0.5em]" placeholder="••••••" aria-label="Enter 6-digit OTP" />
+          <button type="submit" disabled={isLoading} className="w-full bg-yellow-400 text-slate-900 font-black py-4 rounded-2xl shadow-xl uppercase text-[11px] tracking-widest">
+            {isLoading ? 'Verifying...' : 'Verify & Login'}
+          </button>
+        </form>
+      )}
+      <button onClick={handleDemoBypass} className="w-full text-[10px] font-black text-slate-400 uppercase tracking-widest">Try Demo Mode</button>
+    </div>
+  );
 
-        <div className="space-y-3">
-          <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Account</h3>
-          <div className="bg-white rounded-[2rem] p-2 space-y-1 shadow-sm border border-slate-100">
-            {isLoggedIn ? (
-              <button onClick={() => supabaseService.signOut()} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-red-50 transition-colors group">
-                <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center" aria-hidden="true">🔓</div>
-                  <span className="font-bold text-red-600 text-sm">Sign Out</span>
-                </div>
-              </button>
-            ) : (
-              <button onClick={() => setIsLoginFlow(true)} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-colors group">
-                <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-yellow-100 transition-colors text-lg" aria-hidden="true">📱</div>
-                  <span className="font-bold text-slate-800 text-sm">Sign In via SMS</span>
-                </div>
-              </button>
-            )}
+  const renderAgentSignupForm = () => (
+    <div className="animate-in slide-in-from-right duration-300">
+      <button onClick={() => setIsRegisteringAgent(false)} className="text-slate-400 font-bold text-[10px] uppercase mb-6 flex items-center">
+        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+        Back to Menu
+      </button>
+      <h3 className="text-xl font-black text-slate-900 uppercase mb-6">Agent Signup</h3>
+      <form onSubmit={handleAgentSubmit} className="space-y-4">
+        <input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-black" placeholder="Full Name" />
+        <input required value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-black" placeholder="Mobile" />
+        <input required value={formData.vNum} onChange={e => setFormData({ ...formData, vNum: e.target.value })} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-black" placeholder="Vehicle No (TN 01 AT 1234)" />
+        <input required value={formData.vModel} onChange={e => setFormData({ ...formData, vModel: e.target.value })} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-black" placeholder="Vehicle Model" />
+        <button type="submit" className="w-full bg-slate-900 text-yellow-400 font-black py-4 rounded-2xl shadow-xl uppercase text-[11px] tracking-widest mt-4">Start Earning</button>
+      </form>
+    </div>
+  );
 
-            {!agentProfile && (
-              <button onClick={() => setIsRegisteringAgent(true)} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-colors group">
-                <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-blue-100 transition-colors" aria-hidden="true">🚕</div>
-                  <span className="font-bold text-slate-800 text-sm">Register as Agent</span>
-                </div>
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Interface Mode</h3>
-          <div className="p-1.5 bg-white rounded-[2rem] flex shadow-sm border border-slate-100">
-            <button onClick={() => currentRole !== UserRole.USER && onToggleRole()} className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${currentRole === UserRole.USER ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-400'}`}>
-              Passenger
-            </button>
-            <button
-              disabled={!agentProfile && !isLoggedIn}
-              onClick={() => {
-                if (!agentProfile && !isLoggedIn) setIsRegisteringAgent(true);
-                else if (currentRole !== UserRole.DRIVER) onToggleRole();
-              }}
-              className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${currentRole === UserRole.DRIVER ? 'bg-yellow-400 text-slate-900 shadow-xl' : 'text-slate-400'} ${(!agentProfile && !isLoggedIn) && 'opacity-30 cursor-not-allowed'}`}
-            >
-              Agent
+  const renderMenuItems = () => (
+    <>
+      {currentRole === UserRole.DRIVER && (
+        <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+          <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Finance</h3>
+          <div className="bg-white rounded-[2rem] p-2 shadow-sm border border-slate-100">
+            <button onClick={onOpenWallet} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-yellow-50 transition-colors group">
+              <div className="flex items-center space-x-4">
+                <div className="w-10 h-10 rounded-xl bg-yellow-100 text-yellow-600 flex items-center justify-center" aria-hidden="true">👛</div>
+                <span className="font-bold text-slate-800 text-sm">My Wallet & Payouts</span>
+              </div>
+              <svg className="w-4 h-4 text-slate-300 group-hover:text-slate-900" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
             </button>
           </div>
         </div>
-      </>
-    );
+      )}
+
+      <div className="space-y-3">
+        <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Account</h3>
+        <div className="bg-white rounded-[2rem] p-2 space-y-1 shadow-sm border border-slate-100">
+          {isLoggedIn ? (
+            <button onClick={() => supabaseService.signOut()} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-red-50 transition-colors group">
+              <div className="flex items-center space-x-4">
+                <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center" aria-hidden="true">🔓</div>
+                <span className="font-bold text-red-600 text-sm">Sign Out</span>
+              </div>
+            </button>
+          ) : (
+            <button onClick={() => setIsLoginFlow(true)} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-colors group">
+              <div className="flex items-center space-x-4">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-yellow-100 transition-colors text-lg" aria-hidden="true">📱</div>
+                <span className="font-bold text-slate-800 text-sm">Sign In via SMS</span>
+              </div>
+            </button>
+          )}
+
+          {!agentProfile && (
+            <button onClick={() => setIsRegisteringAgent(true)} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-colors group">
+              <div className="flex items-center space-x-4">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-blue-100 transition-colors" aria-hidden="true">🚕</div>
+                <span className="font-bold text-slate-800 text-sm">Register as Agent</span>
+              </div>
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Interface Mode</h3>
+        <div className="p-1.5 bg-white rounded-[2rem] flex shadow-sm border border-slate-100">
+          <button onClick={() => currentRole !== UserRole.USER && onToggleRole()} className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${currentRole === UserRole.USER ? 'bg-slate-900 text-white shadow-xl' : 'text-slate-400'}`}>
+            Passenger
+          </button>
+          <button
+            disabled={!agentProfile && !isLoggedIn}
+            onClick={() => {
+              if (!agentProfile && !isLoggedIn) setIsRegisteringAgent(true);
+              else if (currentRole !== UserRole.DRIVER) onToggleRole();
+            }}
+            className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${currentRole === UserRole.DRIVER ? 'bg-yellow-400 text-slate-900 shadow-xl' : 'text-slate-400'} ${(!agentProfile && !isLoggedIn) && 'opacity-30 cursor-not-allowed'}`}
+          >
+            Agent
+          </button>
+        </div>
+      </div>
+    </>
+  );
+
+  const renderContent = () => {
+    if (isLoginFlow) return renderLoginForm();
+    if (isRegisteringAgent) return renderAgentSignupForm();
+    return renderMenuItems();
   };
 
   return (
