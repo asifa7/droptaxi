@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Direct Taxi Live",
+  "description": "Real-time outstation ride hailing with live tracking and map integration.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
