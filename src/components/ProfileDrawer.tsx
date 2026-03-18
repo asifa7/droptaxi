@@ -56,8 +56,8 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
     e.preventDefault();
     setCriticalError(null);
     const cleanPhone = phone.replaceAll(/\D/g, '');
-    if (cleanPhone.length < 10) {
-      setCriticalError({ code: 'CLIENT_ERROR', message: "Please enter a valid 10-digit mobile number." });
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setCriticalError({ code: 'CLIENT_ERROR', message: "Please enter a valid 10-digit Indian mobile number." });
       return;
     }
 
@@ -102,6 +102,12 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
 
   const handleAgentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanPhone = formData.phone.replaceAll(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setCriticalError({ code: 'CLIENT_ERROR', message: "Agent phone must be a valid 10-digit Indian number." });
+      return;
+    }
+    setCriticalError(null);
     onUpdateAgent({
       name: formData.name,
       phone: formData.phone,
@@ -174,6 +180,11 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
         Back to Menu
       </button>
       <h3 className="text-xl font-black text-slate-900 uppercase mb-6">Agent Signup</h3>
+      {criticalError && (
+        <p className="p-3 bg-red-50 text-red-500 text-xs font-bold rounded-xl animate-in fade-in mb-4">
+          {criticalError.message}
+        </p>
+      )}
       <form onSubmit={handleAgentSubmit} className="space-y-4">
         <input required value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-black" placeholder="Full Name" />
         <input required value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} className="w-full bg-white border border-slate-200 rounded-2xl p-4 text-sm font-black" placeholder="Mobile" />
@@ -221,7 +232,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
           )}
 
           {!agentProfile && (
-            <button onClick={() => setIsRegisteringAgent(true)} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-colors group">
+            <button onClick={() => { setCriticalError(null); setIsRegisteringAgent(true); }} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-slate-50 transition-colors group">
               <div className="flex items-center space-x-4">
                 <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center group-hover:bg-blue-100 transition-colors" aria-hidden="true">🚕</div>
                 <span className="font-bold text-slate-800 text-sm">Register as Agent</span>
@@ -240,7 +251,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
           <button
             disabled={!agentProfile && !isLoggedIn}
             onClick={() => {
-              if (!agentProfile && !isLoggedIn) setIsRegisteringAgent(true);
+              if (!agentProfile && !isLoggedIn) { setCriticalError(null); setIsRegisteringAgent(true); }
               else if (currentRole !== UserRole.DRIVER) onToggleRole();
             }}
             className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${currentRole === UserRole.DRIVER ? 'bg-yellow-400 text-slate-900 shadow-xl' : 'text-slate-400'} ${(!agentProfile && !isLoggedIn) && 'opacity-30 cursor-not-allowed'}`}

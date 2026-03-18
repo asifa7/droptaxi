@@ -7,12 +7,13 @@ interface UberMapProps {
   pickup?: LatLng;
   destination?: LatLng;
   driverLoc?: LatLng;
+  deviceLoc?: LatLng;
   appState: AppState;
   onMapMove?: (coords: LatLng) => void;
   center?: LatLng;
 }
 
-const UberMap: React.FC<UberMapProps> = ({ pickup, destination, driverLoc, appState, onMapMove, center }) => {
+const UberMap: React.FC<UberMapProps> = ({ pickup, destination, driverLoc, deviceLoc, appState, onMapMove, center }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const markersLayer = useRef<L.LayerGroup | null>(null);
@@ -64,6 +65,21 @@ const UberMap: React.FC<UberMapProps> = ({ pickup, destination, driverLoc, appSt
 
     const bounds = L.latLngBounds([]);
 
+    // Device location (blue dot)
+    if (deviceLoc && typeof deviceLoc.lat === 'number') {
+      const deviceIcon = L.divIcon({
+        className: 'user-location-marker',
+        html: `<div style="width: 20px; height: 20px; background: rgba(37, 99, 235, 0.2); border-radius: 50%; display: flex; items-center; justify-center; position: relative;">
+                <div style="width: 12px; height: 12px; background: #2563eb; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 10px rgba(37, 99, 235, 0.5);"></div>
+                <div class="user-pulse"></div>
+              </div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+      L.marker([deviceLoc.lat, deviceLoc.lng], { icon: deviceIcon, zIndexOffset: 1000 }).addTo(markersLayer.current);
+      if (!pickup && !center && !destination) bounds.extend([deviceLoc.lat, deviceLoc.lng]);
+    }
+
     if (pickup && typeof pickup.lat === 'number') {
       const pickupIcon = L.divIcon({
         className: 'custom-div-icon',
@@ -86,7 +102,7 @@ const UberMap: React.FC<UberMapProps> = ({ pickup, destination, driverLoc, appSt
       bounds.extend([destination.lat, destination.lng]);
     }
 
-    if (driverLoc && typeof driverLoc.lat === 'number' && [AppState.TRIP_ACTIVE, AppState.SEARCHING_DRIVER, AppState.ARRIVED].includes(appState)) {
+    if (driverLoc && typeof driverLoc.lat === 'number' && [AppState.TRIP_ACTIVE, AppState.SEARCHING_DRIVER, AppState.ARRIVED, AppState.DRIVER_EN_ROUTE, AppState.DRIVER_ARRIVED].includes(appState)) {
       const driverIcon = L.divIcon({
         className: 'pulse-marker',
         html: `<div style="width: 32px; height: 32px; background: #000; border: 2px solid #fff; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #facc15; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
@@ -140,8 +156,10 @@ const UberMap: React.FC<UberMapProps> = ({ pickup, destination, driverLoc, appSt
       fetchRoute();
     } else if (pickup && typeof pickup.lat === 'number' && !center) {
       mapInstance.current.setView([pickup.lat, pickup.lng], 15);
+    } else if (deviceLoc && typeof deviceLoc.lat === 'number' && !pickup && !center) {
+      mapInstance.current.setView([deviceLoc.lat, deviceLoc.lng], 15);
     }
-  }, [pickup, destination, driverLoc, appState, center]);
+  }, [pickup, destination, driverLoc, deviceLoc, appState, center]);
 
   return (
     <div

@@ -59,6 +59,30 @@
             }
         }
 
+        @keyframes user-pulse-ring {
+            0% {
+                transform: scale(0.5);
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: scale(2.5);
+                opacity: 0;
+            }
+        }
+
+        .user-pulse {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #2563eb;
+            border-radius: 50%;
+            animation: user-pulse-ring 2s ease-out infinite;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* Existing marker pulsing */
         .pulse-marker {
             position: relative;
         }

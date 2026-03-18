@@ -33,8 +33,6 @@ export enum AppState {
   DRIVER_ARRIVED = 'DRIVER_ARRIVED',
   TRIP_ACTIVE = 'TRIP_ACTIVE',
   ARRIVED = 'ARRIVED',
-  DRIVER_LISTING = 'DRIVER_LISTING',
-  PAYMENT = 'PAYMENT',
   WALLET = 'WALLET',
   RATING = 'RATING'
 }
@@ -43,7 +41,8 @@ export enum CarCategory {
   SEDAN = 'SEDAN',
   SUV = 'SUV',
   PREMIUM = 'PREMIUM',
-  MINIBUS = 'MINIBUS'
+  MINIBUS = 'MINIBUS',
+  INNOVA = 'INNOVA'
 }
 
 export interface LatLng {
@@ -115,7 +114,6 @@ export interface BookingDetails {
   routePreview?: string;
   landmarks?: string[];
   distanceKm?: number;
-  returnViability?: boolean;
   marketMinFare?: number;
   marketMaxFare?: number;
 }

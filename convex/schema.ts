@@ -48,7 +48,7 @@ export default defineSchema({
         final_fare: v.optional(v.number()),
         final_distance_km: v.optional(v.number()),
         updated_at: v.optional(v.string()),
-    }).index("by_status", ["status"]).index("by_pool", ["pool_type", "pool_status", "pool_count"]).index("by_user", ["user_id", "status"]).index("by_driver", ["driver_id", "status"]),
+    }).index("by_status", ["status"]).index("by_pool", ["pool_type", "pool_status", "pool_count"]).index("by_user", ["user_id", "status"]).index("by_driver", ["driver_id", "status"]).index("by_driver_phone", ["driver_phone", "status"]),
 
     pricing_rules: defineTable({
         car_category: v.string(),

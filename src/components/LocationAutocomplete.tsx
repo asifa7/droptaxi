@@ -26,6 +26,8 @@ interface LocationAutocompleteProps {
     className?: string; // To match parent styling
     leftIcon?: React.ReactNode;
     rightIcon?: React.ReactNode;
+    onChange?: (value: string) => void;
+    error?: boolean;
 }
 
 const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
@@ -34,7 +36,9 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
     onSelect,
     className,
     leftIcon,
-    rightIcon
+    rightIcon,
+    onChange,
+    error
 }) => {
     const [inputValue, setInputValue] = useState(value);
     const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
@@ -113,6 +117,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
         const val = e.target.value;
         setInputValue(val);
         setIsOpen(true);
+        onChange?.(val);
 
         if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
@@ -131,6 +136,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
 
         setInputValue(cleanAddress);
         setIsOpen(false);
+        onChange?.(cleanAddress);
 
         onSelect({
             address: cleanAddress,
@@ -152,7 +158,7 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
                         if (inputValue.length >= 3 && suggestions.length === 0) fetchSuggestions(inputValue);
                     }}
                     placeholder={placeholder}
-                    className={className}
+                    className={`${className} ${error ? '!border-[#FF4D4F] !ring-[#FF4D4F] shadow-[0_0_10px_rgba(255,77,79,0.1)] transition-all' : ''}`}
                     autoComplete="off"
                 />
                 {rightIcon}
@@ -179,8 +185,8 @@ const LocationAutocomplete: React.FC<LocationAutocompleteProps> = ({
                                     onClick={() => handleSelect(item)}
                                     className="w-full px-4 py-3 text-left hover:bg-slate-50 flex items-center space-x-3 border-b border-slate-50 last:border-0 transition-colors"
                                 >
-                                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0 text-slate-400 text-xs">
-                                        📍
+                                    <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center flex-shrink-0 text-white text-xs shadow-sm">
+                                        <svg fill="currentColor" viewBox="0 0 20 20" className="w-4 h-4" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path></svg>
                                     </div>
                                     <div className="flex-1 overflow-hidden">
                                         <p className="text-xs font-bold truncate text-slate-900">{main}</p>

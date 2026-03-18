@@ -84,6 +84,17 @@ export class PricingEngine {
             surgeMultiplier: 1,
             waitingRate: 5,
             cityRadiusKm: 50
+        },
+        [CarCategory.INNOVA]: {
+            baseFare: 150,
+            minFare: 400,
+            ratePerKmCity: 32,
+            ratePerKmIntercity: 22,
+            ratePerMin: 4,
+            nightMultiplier: 1.2,
+            surgeMultiplier: 1,
+            waitingRate: 5,
+            cityRadiusKm: 50
         }
     };
 

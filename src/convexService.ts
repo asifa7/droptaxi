@@ -150,6 +150,10 @@ export const convexService = {
         return await convexClient.query(api.bookings.getBookingStatus, { id });
     },
 
+    async getActiveBooking(userId?: string, phone?: string) {
+        return await convexClient.query(api.bookings.getActiveBooking, { userId, phone });
+    },
+
     async requestWithdrawal(phone: string, amount: number, upiId: string) {
         return await convexClient.mutation(api.wallets.requestWithdrawal, { phone, amount, upi_id: upiId });
     },

@@ -26,6 +26,7 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
   const [endRideBlocked, setEndRideBlocked] = useState(true);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
   // Track driver location for geo-fence check on active trips
   useEffect(() => {
@@ -107,10 +108,10 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
             <React.Fragment key={step.label}>
               <div className="flex flex-col items-center space-y-1">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] border-2 transition-all duration-500 ${isActive
-                    ? 'bg-green-500 border-green-500 text-white shadow-lg shadow-green-500/30'
-                    : isCurrent
-                      ? 'bg-yellow-400 border-yellow-400 text-slate-900 shadow-lg shadow-yellow-400/30 animate-pulse'
-                      : 'bg-slate-100 border-slate-200 text-slate-400'
+                  ? 'bg-green-500 border-green-500 text-white shadow-lg shadow-green-500/30'
+                  : isCurrent
+                    ? 'bg-yellow-400 border-yellow-400 text-slate-900 shadow-lg shadow-yellow-400/30 animate-pulse'
+                    : 'bg-slate-100 border-slate-200 text-slate-400'
                   }`}>
                   {isActive ? '✓' : step.icon}
                 </div>
@@ -198,28 +199,7 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
         </div>
       )}
 
-      {trip.poolType !== PoolType.SOLO && (
-        <div className="flex items-center justify-between mb-5 bg-yellow-50/50 p-3 rounded-2xl border border-yellow-100">
-          <div className="flex items-center space-x-2">
-            <div className="flex -space-x-2">
-              {[1, 2, 3].slice(0, Math.min(3, trip.poolCount || 1)).map(slot => (
-                <div key={`active-pool-${slot}`} className="w-8 h-8 bg-slate-900 rounded-full border-2 border-white flex items-center justify-center text-xs shadow-sm" aria-hidden="true">
-                  👤
-                </div>
-              ))}
-              {[1, 2, 3].slice(0, Math.max(0, 3 - (trip.poolCount || 1))).map(slot => (
-                <div key={`empty-pool-${slot}`} className="w-8 h-8 bg-slate-200 rounded-full border-2 border-white flex items-center justify-center text-[8px] text-slate-400 font-black" aria-hidden="true">
-                  ?
-                </div>
-              ))}
-            </div>
-            <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">
-              {trip.poolCount || 1}/3 RIDERS MATCHED
-            </span>
-          </div>
-          <span className="text-[9px] font-black text-yellow-600 uppercase">Pool Filling</span>
-        </div>
-      )}
+      {/* Pooling info removed */}
 
       {/* ===== ACTION BUTTONS based on Status ===== */}
       <div className="space-y-3">
@@ -252,9 +232,10 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
             </button>
             <button
               onClick={() => onViewMap(trip)}
-              className="bg-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 active:scale-95 transition-all"
+              className="bg-slate-100 text-slate-900 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center space-x-2"
             >
-              📍 View on Map
+              <svg fill="currentColor" viewBox="0 0 20 20" className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path></svg>
+              <span>View Map</span>
             </button>
           </div>
         )}
@@ -264,15 +245,17 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={() => { if (onArrived) onArrived(trip); }}
-              className="bg-blue-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-95 transition-all"
+              className="bg-blue-500 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-95 transition-all flex items-center justify-center space-x-2"
             >
-              📍 Arrived at Pickup
+              <svg fill="currentColor" viewBox="0 0 20 20" className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path></svg>
+              <span>Arrived at Pickup</span>
             </button>
             <button
               onClick={() => onViewMap(trip)}
-              className="bg-slate-100 text-slate-700 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 active:scale-95 transition-all"
+              className="bg-slate-100 text-slate-900 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 active:scale-95 transition-all flex items-center justify-center space-x-2"
             >
-              📍 View Map
+              <svg fill="currentColor" viewBox="0 0 20 20" className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path></svg>
+              <span>View Map</span>
             </button>
           </div>
         )}
@@ -293,8 +276,8 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
             {/* Distance to drop indicator */}
             {distanceToDrop !== null && (
               <div className={`text-center text-[10px] font-black uppercase tracking-widest py-2 rounded-xl ${endRideBlocked
-                  ? 'bg-amber-50 text-amber-600 border border-amber-200'
-                  : 'bg-green-50 text-green-600 border border-green-200'
+                ? 'bg-amber-50 text-amber-600 border border-amber-200'
+                : 'bg-green-50 text-green-600 border border-green-200'
                 }`}>
                 {endRideBlocked
                   ? `📍 ${distanceToDrop.toFixed(1)} km from drop — Get closer to end ride`
@@ -326,21 +309,27 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
                 </div>
               </div>
             ) : (
-              <button
-                onClick={() => {
-                  if (endRideBlocked) {
-                    alert(`You are ${distanceToDrop?.toFixed(1) || '?'} km away from the drop location. Please reach within ${END_RIDE_RADIUS_KM} km of the drop point to end the ride.`);
-                    return;
-                  }
-                  setShowEndConfirm(true);
-                }}
-                className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all ${endRideBlocked
+              <div className="space-y-2">
+                {localError && (
+                  <p className="text-[9px] font-black text-[#FF4D4F] uppercase text-center animate-bounce">{localError}</p>
+                )}
+                <button
+                  onClick={() => {
+                    if (endRideBlocked) {
+                      setLocalError(`Not at destination! Still ${distanceToDrop?.toFixed(1) || '?'} km away.`);
+                      setTimeout(() => setLocalError(null), 3000);
+                      return;
+                    }
+                    setShowEndConfirm(true);
+                  }}
+                  className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all ${endRideBlocked
                     ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
                     : 'bg-red-500 text-white shadow-red-500/20 hover:bg-red-600'
-                  }`}
-              >
-                🏁 End Ride{endRideBlocked ? ' (Reach Drop Location)' : ' (Complete)'}
-              </button>
+                    }`}
+                >
+                  🏁 End Ride{endRideBlocked ? ' (Reach Drop Location)' : ' (Complete)'}
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -354,14 +343,6 @@ const DriverTripCard: React.FC<DriverTripCardProps> = ({ trip, onAccept, onViewM
           </div>
         )}
       </div>
-
-      {trip.returnViability && (!trip.status || trip.status === 'pending' || trip.status === 'REQUESTED') && (
-        <div className="mt-4 bg-blue-50 p-3 rounded-2xl text-center border border-blue-100 animate-in slide-in-from-top-1">
-          <p className="text-[9px] font-black text-blue-700 uppercase tracking-tighter">
-            <span aria-hidden="true">🔄</span> High probability of return trip from this location
-          </p>
-        </div>
-      )}
     </div>
   );
 };

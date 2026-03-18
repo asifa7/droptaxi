@@ -46,7 +46,7 @@ export const CAR_OPTIONS: CarOption[] = [
     driverAllowance: 400,
     oneWayMinKm: 130,
     roundTripMinKm: 250,
-    image: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=600',
+    image: '/src/car_images/etios.png',
     specs: {
       seats: 4,
       luggage: 2,
@@ -64,7 +64,7 @@ export const CAR_OPTIONS: CarOption[] = [
     driverAllowance: 500,
     oneWayMinKm: 130,
     roundTripMinKm: 250,
-    image: 'https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&q=80&w=600',
+    image: '/src/car_images/xylo.png',
     specs: {
       seats: 6,
       luggage: 4,
@@ -82,7 +82,7 @@ export const CAR_OPTIONS: CarOption[] = [
     driverAllowance: 600,
     oneWayMinKm: 130,
     roundTripMinKm: 250,
-    image: 'https://images.unsplash.com/photo-1621285853634-713b8dd6b5ee?auto=format&fit=crop&q=80&w=600',
+    image: '/src/car_images/innova.jfif',
     specs: {
       seats: 7,
       luggage: 5,

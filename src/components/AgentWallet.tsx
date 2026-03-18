@@ -13,16 +13,18 @@ const AgentWallet: React.FC<AgentWalletProps> = ({ profile, onWithdraw, onClose 
    const [withdrawAmount, setWithdrawAmount] = useState('');
    const [upiId, setUpiId] = useState('');
    const [isWithdrawing, setIsWithdrawing] = useState(false);
+   const [error, setError] = useState<string | null>(null);
 
    const handleWithdrawal = (e: React.FormEvent) => {
       e.preventDefault();
+      setError(null);
       const amt = Number.parseFloat(withdrawAmount);
       if (amt > profile.balance) {
-         alert("Insufficient balance!");
+         setError("Insufficient balance!");
          return;
       }
       if (amt < 500) {
-         alert("Minimum withdrawal is ₹500");
+         setError("Minimum withdrawal is ₹500");
          return;
       }
       onWithdraw(amt, upiId);
@@ -89,12 +91,15 @@ const AgentWallet: React.FC<AgentWalletProps> = ({ profile, onWithdraw, onClose 
                   <form onSubmit={handleWithdrawal} className="space-y-4 animate-in zoom-in-95">
                      <div className="space-y-1">
                         <label htmlFor="withdraw-amt" className="text-[10px] font-black uppercase text-slate-400 ml-2">Amount to Withdraw (Min ₹500)</label>
-                        <input id="withdraw-amt" required type="number" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xl font-black outline-none focus:ring-2 focus:ring-yellow-400" placeholder="₹ 1,000" />
+                        <input id="withdraw-amt" required type="number" value={withdrawAmount} onChange={e => { setWithdrawAmount(e.target.value); setError(null); }} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xl font-black outline-none focus:ring-2 focus:ring-yellow-400" placeholder="₹ 1,000" />
                      </div>
                      <div className="space-y-1">
                         <label htmlFor="upi-id" className="text-[10px] font-black uppercase text-slate-400 ml-2">UPI ID (e.g. mobile@upi)</label>
-                        <input id="upi-id" required type="text" value={upiId} onChange={e => setUpiId(e.target.value)} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-black outline-none focus:ring-2 focus:ring-yellow-400" placeholder="7200134807@ybl" />
+                        <input id="upi-id" required type="text" value={upiId} onChange={e => { setUpiId(e.target.value); setError(null); }} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm font-black outline-none focus:ring-2 focus:ring-yellow-400" placeholder="7200134807@ybl" />
                      </div>
+                     {error && (
+                        <p className="text-[10px] font-black uppercase text-[#FF4D4F] animate-in fade-in slide-in-from-top-1 px-4 text-center">{error}</p>
+                     )}
                      <div className="grid grid-cols-2 gap-3 pt-4">
                         <button type="button" onClick={() => setIsWithdrawing(false)} className="bg-slate-100 text-slate-400 font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest">Cancel</button>
                         <button type="submit" className="bg-slate-900 text-yellow-400 font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest shadow-xl">Submit Request</button>

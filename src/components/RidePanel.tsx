@@ -22,13 +22,6 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
   const [distanceKm, setDistanceKm] = useState<number>(0);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
-  // Pooling UI State
-  const [poolStatus, setPoolStatus] = useState<PoolStatus>(PoolStatus.IDLE);
-  const [poolTimer, setPoolTimer] = useState(90);
-  const [passengerCount, setPassengerCount] = useState(1);
-
-  const isPool = bookingDetails?.poolType !== PoolType.SOLO;
-
   useEffect(() => {
     const fetchDist = async () => {
       if (bookingDetails?.fromCoords && bookingDetails?.toCoords) {
@@ -49,60 +42,29 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
     if (appState === AppState.SELECTING_VEHICLE) fetchDist();
   }, [bookingDetails, appState]);
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (appState === AppState.SEARCHING_DRIVER && isPool) {
-      setPoolStatus(PoolStatus.WAITING);
-      interval = setInterval(() => {
-        setPoolTimer((prev) => {
-          if (prev <= 0) {
-            setPoolStatus(PoolStatus.LOCKED);
-            clearInterval(interval);
-            return 0;
-          }
-          if (prev === 75) {
-            setPassengerCount(2);
-            setPoolStatus(PoolStatus.FILLING);
-          }
-          if (prev === 40 && Math.random() > 0.5) {
-            setPassengerCount(3);
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      setPoolTimer(90);
-      setPassengerCount(1);
-      setPoolStatus(PoolStatus.IDLE);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [appState, isPool]);
+  // removed pooling effect
 
   const calculateTotal = (car: CarOption) => {
     if (!bookingDetails) return 0;
 
-    const durationMins = Math.ceil(distanceKm * 1.5);
+    const isRoundTrip = bookingDetails.tripType === TripType.ROUND_TRIP;
+    const effectiveDistance = isRoundTrip ? distanceKm * 2 : distanceKm;
+    const durationMins = Math.ceil(effectiveDistance * 1.5);
     const tripDate = new Date(`${bookingDetails.date}T${bookingDetails.time}`);
 
     const fareResult = PricingEngine.calculateFare(
       car.id as CarCategory,
-      distanceKm,
+      effectiveDistance,
       durationMins,
       tripDate
     );
 
-    let finalFare = fareResult.totalFare;
-
-    if (isPool) {
-      finalFare = Math.round(finalFare * 0.6);
-    }
-    return finalFare;
+    return fareResult.totalFare;
   };
 
   const totals = useMemo(() => {
     const car = CAR_OPTIONS.find(c => c.id === selected) || CAR_OPTIONS[0];
+    const isRoundTrip = bookingDetails?.tripType === TripType.ROUND_TRIP;
     const riderTotal = calculateTotal(car);
     const driverEarnings = Math.round(riderTotal * 0.8);
 
@@ -112,12 +74,11 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
       uber: Math.round(riderTotal * 1.35),
       local: Math.round(riderTotal * 1.22),
       breakdown: {
-        km: distanceKm,
-        rate: bookingDetails?.tripType === TripType.ROUND_TRIP ? car.roundTripPrice : car.oneWayPrice,
-        allowance: car.driverAllowance
+        km: isRoundTrip ? distanceKm * 2 : distanceKm,
+        isRoundTrip
       }
     };
-  }, [selected, distanceKm, bookingDetails?.tripType, isPool, bookingDetails?.date, bookingDetails?.time]);
+  }, [selected, distanceKm, bookingDetails?.tripType, bookingDetails?.date, bookingDetails?.time]);
 
   const handleSelectCar = (car: CarOption) => {
     setSelected(car.id as unknown as CarCategory);
@@ -125,17 +86,9 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
     setShowModal(true);
   };
 
-  const poolTitle = isPool ? 'Shared Pool Travel' : 'Solo Travel';
-  const confirmText = `Confirm ${isPool ? 'Pool' : 'Solo'} Ride`;
-  const bookingModeLabel = bookingDetails?.poolType.replaceAll('_', ' ');
-
-  const getPoolingStatusText = () => {
-    switch (poolStatus) {
-      case PoolStatus.WAITING: return 'Scanning for Riders...';
-      case PoolStatus.FILLING: return 'Co-passenger Found!';
-      default: return 'Dispatching Pool...';
-    }
-  };
+  const poolTitle = bookingDetails?.tripType === TripType.ROUND_TRIP ? 'Round Trip' : 'Single Ride';
+  const confirmText = `Confirm ${poolTitle}`;
+  const bookingModeLabel = bookingDetails?.tripType === TripType.ROUND_TRIP ? 'Round Trip' : 'One Way Trip';
 
   // Determine the rider's trip phase
   const getTripPhaseInfo = () => {
@@ -144,7 +97,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
       return { label: 'Trip In Progress', sublabel: 'Enjoy your ride', icon: '🚗', color: 'text-green-600', bgColor: 'bg-green-50', borderColor: 'border-green-200' };
     }
     if (status === 'DRIVER_ARRIVED') {
-      return { label: 'Driver Has Arrived', sublabel: 'Your driver is waiting at pickup', icon: '📍', color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' };
+      return { label: 'Driver Has Arrived', sublabel: 'Your driver is waiting at pickup', icon: <svg fill="currentColor" viewBox="0 0 20 20" className="w-8 h-8" xmlns="http://www.w3.org/2000/svg"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path></svg>, color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' };
     }
     if (status === 'DRIVER_EN_ROUTE') {
       return { label: 'Driver On The Way', sublabel: `Arriving in ~${bookingDetails?.driverEta || '?'} min`, icon: '🛣️', color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' };
@@ -163,8 +116,6 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
 
   // Is the panel visible?
   const isPanelVisible = appState !== AppState.IDLE &&
-    appState !== AppState.DRIVER_LISTING &&
-    appState !== AppState.PAYMENT &&
     appState !== AppState.WALLET &&
     appState !== AppState.RATING;
 
@@ -195,21 +146,10 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                 </div>
               </div>
 
-              <div className="bg-slate-50 rounded-3xl p-5 space-y-4 border border-slate-100 shadow-inner">
-                <div className="flex justify-between items-center">
-                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Market Comparison</h4>
-                  <span className="text-[9px] font-black text-green-500 uppercase">Saving ₹{(totals.uber - totals.rider).toLocaleString()}</span>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between p-3 bg-white rounded-2xl border-2 border-yellow-400 shadow-sm">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-yellow-400 text-xs" aria-hidden="true">🛞</div>
-                      <span className="font-black text-sm text-slate-900">Agent {isPool ? 'Pool' : 'Taxi'}</span>
-                    </div>
-                    <span className="font-black text-slate-900">₹{totals.rider.toLocaleString()}</span>
-                  </div>
-                </div>
+              <div className="bg-slate-50 rounded-3xl p-6 space-y-4 border border-slate-100 italic shadow-inner">
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                  Fare includes GST, state highway tolls, and driver allowance. No hidden charges.
+                </p>
               </div>
 
               <button onClick={() => {
@@ -270,8 +210,8 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
       )}
 
       <div className={`fixed bottom-0 left-0 right-0 z-20 glass shadow-[0_-10px_40px_rgba(0,0,0,0.1)] p-6 bottom-sheet transform transition-all duration-500 flex flex-col ${!isPanelVisible ? 'translate-y-full' : 'translate-y-0'} ${(appState === AppState.DRIVER_EN_ROUTE || appState === AppState.DRIVER_ARRIVED || appState === AppState.TRIP_ACTIVE || appState === AppState.SEARCHING_DRIVER)
-          ? 'top-20 md:top-24 rounded-t-[3rem] bg-slate-100/95 backdrop-blur-3xl overflow-y-auto'
-          : 'rounded-t-[2.5rem]'
+        ? 'top-20 md:top-24 rounded-t-[3rem] bg-slate-100/95 backdrop-blur-3xl overflow-y-auto'
+        : 'rounded-t-[2.5rem]'
         }`}>
         {appState === AppState.SELECTING_VEHICLE && (
           <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6 flex-shrink-0"></div>
@@ -306,10 +246,6 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                     <p className="text-[10px] font-black uppercase text-slate-400 mb-1 truncate">{car.name}</p>
                     <div className="flex flex-col items-start">
                       <p className="text-lg font-black text-slate-900 leading-none">₹{riderPrice.toLocaleString()}</p>
-                      <div className="flex items-center space-x-1.5 mt-1">
-                        <span className="text-[9px] font-bold text-slate-300 line-through">₹{soloOriginal.toLocaleString()}</span>
-                        <span className="text-[9px] font-black text-green-500">{discountText}</span>
-                      </div>
                     </div>
                   </button>
                 );
@@ -327,56 +263,21 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
 
         {appState === AppState.SEARCHING_DRIVER && (
           <div className="py-10 text-center space-y-8 animate-in fade-in">
-            {isPool ? (
-              <div className="animate-in fade-in duration-500">
-                <div className="relative w-32 h-32 mx-auto mb-8" role="timer" aria-label={`${poolTimer} seconds left`}>
-                  <div className="absolute inset-0 border-[6px] border-slate-100 rounded-full"></div>
-                  <div
-                    className="absolute inset-0 border-[6px] border-yellow-400 rounded-full transition-all duration-1000"
-                    style={{ clipPath: `inset(0 0 0 ${100 - (poolTimer / 90 * 100)}%)` }}
-                  ></div>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-2xl font-black text-slate-900 leading-none">{poolTimer}</span>
-                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">sec left</span>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex justify-center -space-x-3 mb-4">
-                    {[1, 2, 3].slice(0, passengerCount).map(idx => (
-                      <div key={`rider-slot-${idx}`} className="w-12 h-12 rounded-full border-4 border-white bg-slate-900 flex items-center justify-center text-lg animate-in zoom-in" aria-hidden="true">👤</div>
-                    ))}
-                    {[1, 2, 3].slice(0, Math.max(0, 3 - passengerCount)).map(idx => (
-                      <div key={`empty-slot-${idx}`} className="w-12 h-12 rounded-full border-4 border-white bg-slate-100 flex items-center justify-center text-lg text-slate-300 border-dashed" aria-hidden="true">?</div>
-                    ))}
-                  </div>
-
-                  <h2 className="text-2xl font-black text-slate-900 uppercase">
-                    {getPoolingStatusText()}
-                  </h2>
-                  <p className="text-slate-500 text-sm font-medium">
-                    {passengerCount} of 3 passengers matched. <br />
-                    Linear Overlap logic active for route efficiency.
-                  </p>
+            <div className="space-y-8 py-4">
+              <div className="relative w-32 h-32 mx-auto">
+                <div className="absolute inset-0 bg-yellow-100/40 rounded-full animate-pulse"></div>
+                <div className="absolute inset-4 bg-yellow-100/60 rounded-full animate-pulse delay-150"></div>
+                <div className="absolute inset-8 bg-white border border-yellow-200 shadow-xl rounded-full flex items-center justify-center text-3xl font-black text-slate-900">
+                  ⏱️
                 </div>
               </div>
-            ) : (
-              <div className="space-y-8 py-4">
-                <div className="relative w-32 h-32 mx-auto">
-                  <div className="absolute inset-0 bg-yellow-100/40 rounded-full animate-pulse"></div>
-                  <div className="absolute inset-4 bg-yellow-100/60 rounded-full animate-pulse delay-150"></div>
-                  <div className="absolute inset-8 bg-white border border-yellow-200 shadow-xl rounded-full flex items-center justify-center text-3xl font-black text-slate-900">
-                    ⏱️
-                  </div>
-                </div>
-                <div className="space-y-3 px-4">
-                  <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Connecting to Driver</h2>
-                  <p className="text-slate-500 text-sm font-bold leading-relaxed">
-                    Finding the best agent for your outstation route. This usually takes a few minutes. Please wait.
-                  </p>
-                </div>
+              <div className="space-y-3 px-4">
+                <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Connecting to Driver</h2>
+                <p className="text-slate-500 text-sm font-bold leading-relaxed">
+                  Finding the best agent for your {bookingDetails?.tripType === TripType.ROUND_TRIP ? 'round trip' : 'single ride'} route. This usually takes a few minutes. Please wait.
+                </p>
               </div>
-            )}
+            </div>
             <button onClick={() => setShowCancelConfirm(true)} className="w-full bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 font-black py-4 rounded-2xl uppercase tracking-widest text-xs transition-colors">
               Cancel Request
             </button>
@@ -512,14 +413,13 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
             {/* Action Buttons */}
             <div className="pt-2">
               {(bookingDetails?.status === 'IN_PROGRESS' || bookingDetails?.status === 'started') ? (
-                /* During trip: Pay */
-                <button
-                  onClick={onPay}
-                  className="w-full bg-yellow-400 py-5 rounded-[1.5rem] font-black text-sm uppercase text-slate-900 shadow-xl shadow-yellow-400/20 active:scale-95 transition-all tracking-widest flex items-center justify-center space-x-2"
-                >
-                  <span className="text-lg">💳</span>
-                  <span>Settle Payment via UPI</span>
-                </button>
+                /* During trip: Payment Instruction */
+                <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-2xl text-center space-y-2">
+                  <p className="text-slate-900 font-black text-[10px] uppercase tracking-widest">Payment Instruction</p>
+                  <p className="text-slate-600 text-[11px] font-bold leading-relaxed">
+                    Please pay <span className="text-slate-900">₹{fareDisplay.toLocaleString()}</span> directly to the driver via cash or their personal UPI once the trip is completed.
+                  </p>
+                </div>
               ) : (
                 /* Before trip starts: Cancel is available */
                 canCancelRide() && (

@@ -15,6 +15,83 @@ export const getPendingRides = query({
     },
 });
 
+export const getActiveBooking = query({
+    args: { userId: v.optional(v.string()), phone: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        if (!args.userId && !args.phone) return null;
+
+        // Search for active bookings for this user
+        const activeStatues = ["pending", "REQUESTED", "DRIVER_ACCEPTED", "DRIVER_EN_ROUTE", "DRIVER_ARRIVED", "IN_PROGRESS"];
+
+        // We can't easily query multiple statuses with Index equality in one go without UNION or filtering
+        // Let's filter for now or query the by_user index and filter manually
+        let bookings = [];
+        if (args.userId) {
+            bookings = await ctx.db.query("bookings").withIndex("by_user", q => q.eq("user_id", args.userId)).order("desc").collect();
+        } else {
+            // Fallback to phone if no userId (anonymous users)
+            bookings = await ctx.db.query("bookings").filter(q => q.eq(q.field("phone"), args.phone)).order("desc").collect();
+        }
+
+        return bookings.find(b => activeStatues.includes(b.status)) || null;
+    }
+});
+
+export const getDriverFeed = query({
+    args: { driverPhone: v.optional(v.string()) },
+    handler: async (ctx, args) => {
+        // Query ALL bookings to search for our "locked" active ride or show pending
+        const allRides = await ctx.db.query("bookings").collect();
+        const activeStats = ["DRIVER_ACCEPTED", "ACCEPTED", "DRIVER_EN_ROUTE", "DRIVER_ARRIVED", "IN_PROGRESS", "STARTED"];
+
+        const driverPhone = args.driverPhone;
+        let myActiveRide = null;
+        if (driverPhone) {
+            myActiveRide = allRides.find(r =>
+                r.driver_phone === driverPhone &&
+                activeStats.includes((r.status || "").toUpperCase())
+            );
+        }
+
+        // Check if driver is online
+        if (driverPhone) {
+            const wallet = await ctx.db.query("agent_wallets")
+                .withIndex("by_phone", q => q.eq("phone", driverPhone))
+                .first();
+
+            if (!wallet?.is_online) {
+                // If offline, only show the ride they are CURRENTLY on (if any)
+                return myActiveRide ? [{ ...myActiveRide, id: myActiveRide._id }] : [];
+            }
+        }
+
+        // 3. If locked into an active trip, don't show any other requests.
+        if (myActiveRide) {
+            return [{ ...myActiveRide, id: myActiveRide._id }];
+        }
+
+        const filtered = allRides.filter(r => {
+            const s = (r.status || "pending").toUpperCase();
+
+            // 1. Hide terminal states
+            if (["COMPLETED", "CANCELLED"].includes(s)) return false;
+
+            // 2. Hide if already assigned to someone else
+            if (r.driver_phone && args.driverPhone && r.driver_phone !== args.driverPhone) return false;
+
+            // 3. For the "Public Highway", ONLY show PENDING or REQUESTED
+            if (s !== 'PENDING' && s !== 'REQUESTED') return false;
+
+            return true;
+        });
+
+        const unique = Array.from(new Map(filtered.map(r => [String(r._id), r])).values());
+
+        return unique.sort((a, b) => b._creationTime - a._creationTime)
+            .map(r => ({ ...r, id: r._id }));
+    }
+});
+
 export const getRiderHistory = query({
     args: { userId: v.string(), limit: v.optional(v.number()) },
     handler: async (ctx, args) => {
@@ -51,6 +128,16 @@ export const getDriverHistory = query({
     },
 });
 
+export const getDriverActiveRides = query({
+    args: { driverPhone: v.string() },
+    handler: async (ctx, args) => {
+        const activeStatuses = ["DRIVER_ACCEPTED", "DRIVER_EN_ROUTE", "DRIVER_ARRIVED", "IN_PROGRESS", "started", "accepted"];
+        return await ctx.db.query("bookings")
+            .withIndex("by_driver_phone", q => q.eq("driver_phone", args.driverPhone))
+            .collect()
+            .then(res => res.filter(b => activeStatuses.includes(b.status)));
+    }
+});
 export const getBookingStatus = query({
     args: { id: v.id("bookings") },
     handler: async (ctx, args) => {
@@ -74,6 +161,9 @@ export const getBookingStatus = query({
             from_name: ride.from_name,
             to_name: ride.to_name,
             accepted_at: ride.accepted_at,
+            pool_status: ride.pool_status,
+            pool_count: ride.pool_count,
+            phone: ride.phone
         };
     },
 });
@@ -161,9 +251,41 @@ export const acceptRide = mutation({
     },
     handler: async (ctx, args) => {
         const booking = await ctx.db.get(args.id);
-        if (!booking) throw new Error("Booking not found");
+        if (!booking) throw new Error("BOOKING_NOT_FOUND");
+
+        // GUARD: Only pending or requested rides can be accepted
         if (booking.status !== "pending" && booking.status !== "REQUESTED") {
             throw new Error("RIDE_ALREADY_TAKEN");
+        }
+
+        // GUARD: Must be ONLINE to accept rides
+        const wallet = await ctx.db.query("agent_wallets")
+            .withIndex("by_phone", q => q.eq("phone", args.driver_phone))
+            .first();
+
+        if (!wallet?.is_online) {
+            throw new Error("DRIVER_OFFLINE");
+        }
+
+        // GUARD: One active trip at a time
+        const activeStatuses = ["DRIVER_ACCEPTED", "ACCEPTED", "DRIVER_EN_ROUTE", "DRIVER_ARRIVED", "IN_PROGRESS", "STARTED"];
+
+        // Search by phone if ID is missing, or by ID if available
+        let activeTrip;
+        if (args.driver_id) {
+            activeTrip = await ctx.db.query("bookings")
+                .withIndex("by_driver", q => q.eq("driver_id", args.driver_id))
+                .collect()
+                .then(rides => rides.find(r => activeStatuses.includes(r.status)));
+        } else {
+            activeTrip = await ctx.db.query("bookings")
+                .withIndex("by_driver_phone", q => q.eq("driver_phone", args.driver_phone))
+                .collect()
+                .then(rides => rides.find(r => activeStatuses.includes(r.status)));
+        }
+
+        if (activeTrip) {
+            throw new Error("DRIVER_ALREADY_BUSY");
         }
 
         await ctx.db.patch(args.id, {
@@ -186,13 +308,32 @@ export const updateStatus = mutation({
         status: v.string(),
     },
     handler: async (ctx, args) => {
-        const updates: any = { status: args.status };
+        const booking = await ctx.db.get(args.id);
+        if (!booking) throw new Error("BOOKING_NOT_FOUND");
+
+        const currentStatus = booking.status;
+        const nextStatus = args.status;
+
+        // Transition Validation Logic: Allow jumping ahead but not going backward
+        const activeStatuses = ["DRIVER_ACCEPTED", "DRIVER_EN_ROUTE", "DRIVER_ARRIVED"];
+
+        if (nextStatus === "DRIVER_EN_ROUTE") {
+            if (currentStatus !== "DRIVER_ACCEPTED") throw new Error("INVALID_TRANSITION_EXPECTED_ACCEPTED");
+        } else if (nextStatus === "DRIVER_ARRIVED") {
+            if (!["DRIVER_ACCEPTED", "DRIVER_EN_ROUTE"].includes(currentStatus)) throw new Error("INVALID_TRANSITION_EXPECTED_PRE_ARRIVE_STATUS");
+        } else if (nextStatus === "IN_PROGRESS") {
+            if (!activeStatuses.includes(currentStatus)) throw new Error("INVALID_TRANSITION_EXPECTED_ACTIVE_STATUS");
+        } else if (nextStatus === "CANCELLED") {
+            if (["COMPLETED", "IN_PROGRESS"].includes(currentStatus)) throw new Error("CANNOT_CANCEL_ACTIVE_OR_COMPLETED_TRIP");
+        }
+
+        const updates: any = { status: nextStatus };
         const now = new Date().toISOString();
 
-        if (args.status === "DRIVER_EN_ROUTE") updates.en_route_at = now;
-        if (args.status === "DRIVER_ARRIVED") updates.arrived_at = now;
-        if (args.status === "IN_PROGRESS") updates.started_at = now;
-        if (args.status === "CANCELLED") updates.cancelled_at = now;
+        if (nextStatus === "DRIVER_EN_ROUTE") updates.en_route_at = now;
+        if (nextStatus === "DRIVER_ARRIVED") updates.arrived_at = now;
+        if (nextStatus === "IN_PROGRESS") updates.started_at = now;
+        if (nextStatus === "CANCELLED") updates.cancelled_at = now;
 
         await ctx.db.patch(args.id, updates);
         return await ctx.db.get(args.id);
@@ -206,12 +347,50 @@ export const completeRide = mutation({
         final_distance_km: v.number(),
     },
     handler: async (ctx, args) => {
+        const booking = await ctx.db.get(args.id);
+        if (!booking) throw new Error("BOOKING_NOT_FOUND");
+
+        // GUARD: Only IN_PROGRESS rides can be completed
+        if (booking.status !== "IN_PROGRESS" && booking.status !== "started") {
+            throw new Error("RIDE_NOT_IN_PROGRESS");
+        }
+
         await ctx.db.patch(args.id, {
             status: "COMPLETED",
             completed_at: new Date().toISOString(),
             final_fare: args.final_fare,
             final_distance_km: args.final_distance_km,
         });
+
+        // Track Commission Due (Driver now collects 100% and owes us % commission)
+        const driverPhone = booking.driver_phone;
+        if (driverPhone) {
+            const dp: string = driverPhone;
+            const wallet = await ctx.db.query("agent_wallets")
+                .withIndex("by_phone", q => q.eq("phone", dp))
+                .first();
+
+            // 20% Commission Rate (consistent with totals = 0.8 * fare)
+            const commissionAmount = Math.round(args.final_fare * 0.20);
+
+            if (wallet) {
+                await ctx.db.patch(wallet._id, {
+                    commission_due: (wallet.commission_due || 0) + commissionAmount,
+                    total_earned: (wallet.total_earned || 0) + args.final_fare,
+                    updated_at: new Date().toISOString()
+                });
+
+                // Record commission transaction
+                await ctx.db.insert("wallet_transactions", {
+                    agent_phone: driverPhone,
+                    type: "COMMISSION",
+                    amount: commissionAmount,
+                    description: `Commission for Ride ${String(args.id).slice(0, 8)}`,
+                    status: "PENDING",
+                });
+            }
+        }
+
         return await ctx.db.get(args.id);
     },
 });
