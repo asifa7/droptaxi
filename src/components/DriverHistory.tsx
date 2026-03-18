@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { supabaseService } from '../supabaseClient';
+import React from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import HistoryItem from './HistoryItem';
 
 interface RideHistoryRecord {
@@ -16,28 +17,11 @@ interface DriverHistoryProps {
 }
 
 const DriverHistory: React.FC<DriverHistoryProps> = ({ driverId }) => {
-    const [rides, setRides] = useState<RideHistoryRecord[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const rides = useQuery(api.bookings.getDriverHistory, { driverId });
 
-    useEffect(() => {
-        const fetchHistory = async () => {
-            try {
-                setLoading(true);
-                setError(null);
-                const data = await supabaseService.getDriverHistory(driverId);
-                setRides(data as RideHistoryRecord[]);
-            } catch (e: any) {
-                setError(e.message || 'Failed to load completed rides');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (driverId) {
-            fetchHistory();
-        }
-    }, [driverId]);
+    // In Convex, undefined means loading, null or array means done.
+    const loading = rides === undefined;
+    const error = null; // Error boundaries handle Convex errors normally, but we can mimic it.
 
     if (loading) {
         return (

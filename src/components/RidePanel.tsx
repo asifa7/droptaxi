@@ -12,13 +12,15 @@ interface RidePanelProps {
   onCancel: () => void;
   bookingDetails?: BookingDetails;
   onPay?: () => void;
+  onCancelRide?: () => void;
 }
 
-const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bookingDetails, onPay }) => {
+const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bookingDetails, onPay, onCancelRide }) => {
   const [selected, setSelected] = useState<CarCategory>(CarCategory.SEDAN);
   const [showModal, setShowModal] = useState(false);
   const [modalCar, setModalCar] = useState<CarOption | null>(null);
   const [distanceKm, setDistanceKm] = useState<number>(0);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   // Pooling UI State
   const [poolStatus, setPoolStatus] = useState<PoolStatus>(PoolStatus.IDLE);
@@ -135,7 +137,36 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
     }
   };
 
-  const activeTripStatus = (bookingDetails?.status === 'IN_PROGRESS' || bookingDetails?.status === 'started') ? 'Trip Started' : 'Driver Assigned';
+  // Determine the rider's trip phase
+  const getTripPhaseInfo = () => {
+    const status = bookingDetails?.status;
+    if (status === 'IN_PROGRESS' || status === 'started') {
+      return { label: 'Trip In Progress', sublabel: 'Enjoy your ride', icon: '🚗', color: 'text-green-600', bgColor: 'bg-green-50', borderColor: 'border-green-200' };
+    }
+    if (status === 'DRIVER_ARRIVED') {
+      return { label: 'Driver Has Arrived', sublabel: 'Your driver is waiting at pickup', icon: '📍', color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' };
+    }
+    if (status === 'DRIVER_EN_ROUTE') {
+      return { label: 'Driver On The Way', sublabel: `Arriving in ~${bookingDetails?.driverEta || '?'} min`, icon: '🛣️', color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-200' };
+    }
+    // DRIVER_ACCEPTED
+    return { label: 'Driver Assigned', sublabel: 'Driver will start heading to you shortly', icon: '✅', color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' };
+  };
+
+  const canCancelRide = () => {
+    const status = bookingDetails?.status;
+    return status !== 'IN_PROGRESS' && status !== 'started' && status !== 'COMPLETED' && status !== 'completed';
+  };
+
+  const fareDisplay = bookingDetails?.fareAmount || totals.rider;
+  const carInfo = CAR_OPTIONS.find(c => c.id === (bookingDetails?.carCategory || selected));
+
+  // Is the panel visible?
+  const isPanelVisible = appState !== AppState.IDLE &&
+    appState !== AppState.DRIVER_LISTING &&
+    appState !== AppState.PAYMENT &&
+    appState !== AppState.WALLET &&
+    appState !== AppState.RATING;
 
   return (
     <>
@@ -197,8 +228,54 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
         </div>
       )}
 
-      <div className={`fixed bottom-0 left-0 right-0 z-20 glass rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.1)] p-6 bottom-sheet transform ${appState === AppState.IDLE || appState === AppState.DRIVER_LISTING || appState === AppState.PAYMENT ? 'translate-y-full' : 'translate-y-0'}`}>
-        <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6"></div>
+      {/* Cancel Confirmation Modal */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4">
+          <button
+            type="button"
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in w-full h-full cursor-default"
+            onClick={() => setShowCancelConfirm(false)}
+            aria-label="Close cancel dialog"
+          />
+          <div className="relative w-full max-w-sm bg-white rounded-[2rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 p-8 space-y-6">
+            <div className="text-center space-y-3">
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto text-3xl">⚠️</div>
+              <h3 className="text-xl font-black text-slate-900 uppercase">Cancel Ride?</h3>
+              <p className="text-sm text-slate-500 font-medium">
+                {bookingDetails?.status === 'DRIVER_ACCEPTED' || bookingDetails?.status === 'DRIVER_EN_ROUTE' || bookingDetails?.status === 'DRIVER_ARRIVED'
+                  ? 'A driver has already been assigned. Cancellation charges of ₹50 may apply.'
+                  : 'Are you sure you want to cancel this ride request?'
+                }
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-slate-100 text-slate-600 active:scale-95 transition-all"
+              >
+                Keep Ride
+              </button>
+              <button
+                onClick={() => {
+                  setShowCancelConfirm(false);
+                  if (onCancelRide) onCancelRide();
+                }}
+                className="py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest bg-red-500 text-white shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+              >
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={`fixed bottom-0 left-0 right-0 z-20 glass shadow-[0_-10px_40px_rgba(0,0,0,0.1)] p-6 bottom-sheet transform transition-all duration-500 flex flex-col ${!isPanelVisible ? 'translate-y-full' : 'translate-y-0'} ${(appState === AppState.DRIVER_EN_ROUTE || appState === AppState.DRIVER_ARRIVED || appState === AppState.TRIP_ACTIVE || appState === AppState.SEARCHING_DRIVER)
+          ? 'top-20 md:top-24 rounded-t-[3rem] bg-slate-100/95 backdrop-blur-3xl overflow-y-auto'
+          : 'rounded-t-[2.5rem]'
+        }`}>
+        {appState === AppState.SELECTING_VEHICLE && (
+          <div className="w-12 h-1.5 bg-gray-300 rounded-full mx-auto mb-6 flex-shrink-0"></div>
+        )}
 
         {appState === AppState.SELECTING_VEHICLE && (
           <div className="space-y-6">
@@ -249,7 +326,7 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
         )}
 
         {appState === AppState.SEARCHING_DRIVER && (
-          <div className="py-10 text-center space-y-6">
+          <div className="py-10 text-center space-y-8 animate-in fade-in">
             {isPool ? (
               <div className="animate-in fade-in duration-500">
                 <div className="relative w-32 h-32 mx-auto mb-8" role="timer" aria-label={`${poolTimer} seconds left`}>
@@ -284,50 +361,176 @@ const RidePanel: React.FC<RidePanelProps> = ({ appState, onConfirm, onCancel, bo
                 </div>
               </div>
             ) : (
-              <div className="space-y-6">
-                <div className="relative w-24 h-24 mx-auto">
-                  <div className="absolute inset-0 border-8 border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
-                  <div className="absolute inset-4 bg-slate-900 rounded-full flex items-center justify-center text-yellow-400" aria-hidden="true">🛞</div>
+              <div className="space-y-8 py-4">
+                <div className="relative w-32 h-32 mx-auto">
+                  <div className="absolute inset-0 bg-yellow-100/40 rounded-full animate-pulse"></div>
+                  <div className="absolute inset-4 bg-yellow-100/60 rounded-full animate-pulse delay-150"></div>
+                  <div className="absolute inset-8 bg-white border border-yellow-200 shadow-xl rounded-full flex items-center justify-center text-3xl font-black text-slate-900">
+                    ⏱️
+                  </div>
                 </div>
-                <h2 className="text-2xl font-black text-slate-900 uppercase">Finding Driver...</h2>
-                <p className="text-slate-500 text-sm">Securing your fixed outstation rate.</p>
+                <div className="space-y-3 px-4">
+                  <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Connecting to Driver</h2>
+                  <p className="text-slate-500 text-sm font-bold leading-relaxed">
+                    Finding the best agent for your outstation route. This usually takes a few minutes. Please wait.
+                  </p>
+                </div>
               </div>
             )}
-            <button onClick={onCancel} className="w-full bg-red-50 text-red-600 font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest border border-red-100">Cancel Request</button>
+            <button onClick={() => setShowCancelConfirm(true)} className="w-full bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 font-black py-4 rounded-2xl uppercase tracking-widest text-xs transition-colors">
+              Cancel Request
+            </button>
           </div>
         )}
 
-        {appState === AppState.TRIP_ACTIVE && (
-          <div className="space-y-6 pb-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="w-14 h-14 bg-slate-900 rounded-2xl flex items-center justify-center text-yellow-400 text-2xl shadow-lg" aria-hidden="true">👨‍✈️</div>
+        {/* ========= DRIVER EN ROUTE / ARRIVED / TRIP ACTIVE ========= */}
+        {(appState === AppState.DRIVER_EN_ROUTE || appState === AppState.DRIVER_ARRIVED || appState === AppState.TRIP_ACTIVE) && (
+          <div className="space-y-5 pb-4 animate-in fade-in duration-500">
+            {/* Trip Phase Indicator */}
+            {(() => {
+              const phase = getTripPhaseInfo();
+              return (
+                <div className={`${phase.bgColor} p-4 rounded-3xl border ${phase.borderColor} flex items-center justify-between`}>
+                  <div className="flex items-center space-x-4">
+                    <div className="text-3xl flex-shrink-0 bg-white w-12 h-12 rounded-xl flex items-center justify-center shadow-sm">{phase.icon}</div>
+                    <div>
+                      <h4 className={`text-base font-black uppercase ${phase.color} tracking-tight`}>{phase.label}</h4>
+                      <p className="text-xs text-slate-600 font-bold">{phase.sublabel}</p>
+                    </div>
+                  </div>
+                  {bookingDetails?.driverEta && (appState === AppState.DRIVER_EN_ROUTE) && (
+                    <div className="text-right flex-shrink-0 bg-white px-3 py-2 rounded-xl shadow-sm">
+                      <p className={`text-xl font-black ${phase.color} leading-none`}>{bookingDetails.driverEta}</p>
+                      <p className="text-[9px] font-black uppercase text-slate-400">min</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Comprehensive Trip Itinerary Card */}
+            <div className="bg-white rounded-[2rem] shadow-xl border border-slate-100 overflow-hidden">
+              {/* Header */}
+              <div className="bg-slate-900 text-white p-5 flex justify-between items-center relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
                 <div>
-                  <h4 className="text-lg font-black text-slate-900 uppercase">
-                    {activeTripStatus}
-                  </h4>
-                  <p className="text-xs font-bold text-slate-400">Locked Price: ₹{totals.rider.toLocaleString()}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-yellow-400 mb-1">Booking Ref</p>
+                  <p className="font-mono text-sm font-bold opacity-90">{bookingDetails?.id?.slice(0, 8).toUpperCase() || 'TRP-1234'}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Status</p>
+                  <p className="font-black text-sm uppercase tracking-wider text-green-400">Confirmed</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="text-xl font-black text-slate-900">₹{totals.rider.toLocaleString()}</p>
-                <p className="text-[10px] font-black uppercase text-slate-400">Fixed Fare</p>
+
+              {/* Itinerary Body */}
+              <div className="p-5 space-y-6">
+
+                {/* Driver Details */}
+                {(bookingDetails?.driverName || bookingDetails?.driverPhone) && (
+                  <div className="flex items-center justify-between pb-5 border-b border-slate-100">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-xl shadow-sm border border-slate-200">
+                        👨‍✈️
+                      </div>
+                      <div>
+                        <h4 className="font-black text-slate-900">{bookingDetails.driverName || 'Verified Agent'}</h4>
+                        <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center">
+                          <span className="w-2 h-2 bg-green-500 rounded-full mr-1.5 inline-block"></span>
+                          {bookingDetails.driverVehicleModel || carInfo?.description || 'Premium Vehicle'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end space-y-2">
+                      {bookingDetails.driverVehicleNumber && (
+                        <span className="bg-yellow-100 text-yellow-800 text-[10px] font-black px-2 py-1 rounded-md border border-yellow-200 uppercase tracking-widest">
+                          {bookingDetails.driverVehicleNumber}
+                        </span>
+                      )}
+                      <a
+                        href={`tel:${bookingDetails?.driverPhone || PHONE_NUMBER}`}
+                        className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-lg uppercase tracking-widest active:scale-95 transition-all"
+                        aria-label="Call driver"
+                      >
+                        Call
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {/* Route Map (Textual) */}
+                <div className="relative pl-6 space-y-6 pb-2">
+                  <div className="absolute left-2.5 top-2 bottom-2 w-0.5 bg-slate-200 rounded-full"></div>
+
+                  <div className="relative">
+                    <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-white border-4 border-slate-900 shadow-sm"></div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Pickup Location</p>
+                      <p className="text-sm font-bold text-slate-900 leading-snug">{bookingDetails?.from || 'Pickup Point'}</p>
+                    </div>
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute -left-[27px] top-1 w-4 h-4 rounded-full bg-white border-4 border-yellow-400 shadow-sm"></div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-0.5">Drop-off Destination</p>
+                      <p className="text-sm font-bold text-slate-900 leading-snug">{bookingDetails?.to || 'Drop Point'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fare Summary */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+                  <div className="flex justify-between items-center mb-3">
+                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Trip Summary</span>
+                    <span className="text-xs font-black text-slate-900 bg-white px-2 py-1 rounded shadow-sm border border-slate-100">
+                      {(bookingDetails?.distanceKm || distanceKm || 0).toFixed(1)} KM
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 mb-3">
+                    <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                      <span>Vehicle Rate ({carInfo?.name || 'Sedan'})</span>
+                      <span>₹{totals.breakdown.rate}/km</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs font-bold text-slate-600">
+                      <span>Driver Allowance</span>
+                      <span>₹{totals.breakdown.allowance}</span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-200 pt-3 flex justify-between items-center">
+                    <span className="text-xs font-black text-slate-900 uppercase tracking-widest">Total Amount</span>
+                    <span className="text-2xl font-black text-slate-900 tracking-tighter">₹{fareDisplay.toLocaleString()}</span>
+                  </div>
+                </div>
+
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                onClick={onPay}
-                className="bg-yellow-400 py-4 rounded-2xl font-black text-xs uppercase text-slate-900 shadow-xl shadow-yellow-400/20 active:scale-95 transition-all"
-              >
-                Pay Now via UPI
-              </button>
-              <a
-                href={`tel:${PHONE_NUMBER}`}
-                className="bg-slate-100 py-4 rounded-2xl font-black text-xs uppercase text-slate-900 flex items-center justify-center active:scale-95 transition-all"
-                aria-label="Call driver"
-              >
-                Contact Driver
-              </a>
+
+            {/* Action Buttons */}
+            <div className="pt-2">
+              {(bookingDetails?.status === 'IN_PROGRESS' || bookingDetails?.status === 'started') ? (
+                /* During trip: Pay */
+                <button
+                  onClick={onPay}
+                  className="w-full bg-yellow-400 py-5 rounded-[1.5rem] font-black text-sm uppercase text-slate-900 shadow-xl shadow-yellow-400/20 active:scale-95 transition-all tracking-widest flex items-center justify-center space-x-2"
+                >
+                  <span className="text-lg">💳</span>
+                  <span>Settle Payment via UPI</span>
+                </button>
+              ) : (
+                /* Before trip starts: Cancel is available */
+                canCancelRide() && (
+                  <button
+                    onClick={() => setShowCancelConfirm(true)}
+                    className="w-full bg-white text-red-500 font-black py-4 rounded-[1.5rem] uppercase text-[10px] tracking-widest border border-slate-200 shadow-sm active:scale-95 transition-all"
+                  >
+                    Cancel This Ride
+                  </button>
+                )
+              )}
             </div>
           </div>
         )}

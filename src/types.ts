@@ -29,6 +29,8 @@ export enum AppState {
   IDLE = 'IDLE',
   SELECTING_VEHICLE = 'SELECTING_VEHICLE',
   SEARCHING_DRIVER = 'SEARCHING_DRIVER',
+  DRIVER_EN_ROUTE = 'DRIVER_EN_ROUTE',
+  DRIVER_ARRIVED = 'DRIVER_ARRIVED',
   TRIP_ACTIVE = 'TRIP_ACTIVE',
   ARRIVED = 'ARRIVED',
   DRIVER_LISTING = 'DRIVER_LISTING',
@@ -98,9 +100,15 @@ export interface BookingDetails {
   recipientPhone?: string;
   isForSomeoneElse: boolean;
   carCategory: CarCategory;
-  status?: 'pending' | 'accepted' | 'completed';
+  status?: string;
   fareAmount?: number;
   driverPhone?: string;
+  driverName?: string;
+  driverVehicleNumber?: string;
+  driverVehicleModel?: string;
+  driverLat?: number;
+  driverLng?: number;
+  driverEta?: number; // minutes
   // Enhanced Agent Fields
   pickupDistance?: number;
   estimatedPickupTime?: number;

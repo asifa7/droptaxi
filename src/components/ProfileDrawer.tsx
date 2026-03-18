@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { UserRole, AgentProfile } from '../types';
 import { BRAND_NAME } from '../constants';
-import { supabaseService } from '../supabaseClient';
+import { convexService } from '../convexService';
 
 const AppLogoIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} viewBox="0 0 36 36" fill="currentColor" aria-hidden="true">
@@ -63,7 +63,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
 
     setIsLoading(true);
     try {
-      await supabaseService.sendOTP(cleanPhone);
+      await convexService.sendOTP(cleanPhone);
       setLoginStep('OTP');
     } catch (err: any) {
       console.error("OTP send failed:", err);
@@ -78,7 +78,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
     setCriticalError(null);
     setIsLoading(true);
     try {
-      const session = await supabaseService.verifyOTP(phone, otp);
+      const session = await convexService.verifyOTP(phone, otp);
       if (session) {
         onToggleLogin();
         setIsLoginFlow(false);
@@ -205,7 +205,7 @@ const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
         <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Account</h3>
         <div className="bg-white rounded-[2rem] p-2 space-y-1 shadow-sm border border-slate-100">
           {isLoggedIn ? (
-            <button onClick={() => supabaseService.signOut()} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-red-50 transition-colors group">
+            <button onClick={() => convexService.signOut()} className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-red-50 transition-colors group">
               <div className="flex items-center space-x-4">
                 <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center" aria-hidden="true">🔓</div>
                 <span className="font-bold text-red-600 text-sm">Sign Out</span>

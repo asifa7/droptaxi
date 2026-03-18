@@ -109,24 +109,24 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
 
   return (
     <div className="booking-card bg-white rounded-[2rem] shadow-2xl overflow-hidden w-full border border-slate-100 relative flex flex-col animate-in slide-in-from-bottom-5">
-      {/* Top Pool/Solo Selector - More compact */}
+      {/* Top Trip Type Selector - One Way vs Round Trip */}
       <div className="bg-[#0f172a] p-2 flex gap-2">
         {[
-          { id: PoolType.SOLO, label: 'Solo', icon: '👤', aria: 'Solo Ride' },
-          { id: PoolType.INTERCITY_POOL, label: 'Intercity Pool', icon: '👥', aria: 'Intercity Pool Ride' }
-        ].map(mode => (
+          { id: TripType.ONE_WAY, label: 'One Way', icon: '➡️', aria: 'One Way Trip' },
+          { id: TripType.ROUND_TRIP, label: 'Round Trip', icon: '🔄', aria: 'Round Trip' }
+        ].map(type => (
           <button
-            key={mode.id}
+            key={type.id}
             type="button"
-            onClick={() => setDetails({ ...details, poolType: mode.id === PoolType.SOLO ? PoolType.SOLO : PoolType.INTERCITY_POOL })}
-            aria-label={mode.aria}
-            className={`flex-1 py-2.5 rounded-[1.2rem] flex items-center justify-center space-x-2 transition-all duration-300 ${(details.poolType === PoolType.SOLO && mode.id === PoolType.SOLO) || (details.poolType !== PoolType.SOLO && mode.id === PoolType.INTERCITY_POOL)
+            onClick={() => setDetails({ ...details, tripType: type.id })}
+            aria-label={type.aria}
+            className={`flex-1 py-2.5 rounded-[1.2rem] flex items-center justify-center space-x-2 transition-all duration-300 ${details.tripType === type.id
               ? 'bg-yellow-400 text-slate-900 shadow-md'
               : 'text-slate-500 hover:text-slate-300'
               }`}
           >
-            <span className="text-xs" aria-hidden="true">{mode.icon}</span>
-            <span className="text-[10px] font-black uppercase tracking-widest">{mode.label}</span>
+            <span className="text-xs" aria-hidden="true">{type.icon}</span>
+            <span className="text-[10px] font-black uppercase tracking-widest">{type.label}</span>
           </button>
         ))}
       </div>
@@ -192,7 +192,7 @@ const BookingForm: React.FC<BookingFormProps> = ({ isLoggedIn, onComplete, onEnt
         </div>
 
         <button type="submit" className="w-full bg-[#0f172a] text-white font-black py-4 rounded-xl shadow-lg active:scale-[0.98] hover:bg-slate-800 transition-all text-xs tracking-widest uppercase mt-2">
-          {details.poolType === PoolType.SOLO ? 'Find Solo Ride' : 'Search Pool'}
+          {details.tripType === TripType.ROUND_TRIP ? 'Find Round Trip' : 'Find Single Ride'}
         </button>
       </form>
     </div>

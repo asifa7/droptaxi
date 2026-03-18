@@ -1,4 +1,4 @@
-import { supabaseService } from '../supabaseClient';
+import { convexService } from '../convexService';
 import { CarCategory } from '../types';
 import { CAR_OPTIONS, COMMISSION_RATE } from '../constants';
 
@@ -95,14 +95,14 @@ export class PricingEngine {
         if (this.initialized) return;
         try {
             // Initial Fetch
-            const rules = await supabaseService.fetchPricingRules();
+            const rules = await convexService.fetchPricingRules();
             if (rules && rules.length > 0) {
                 this.updateConfigFromRules(rules);
-                console.log('Pricing rules synced from Supabase');
+                console.log('Pricing rules synced from Convex');
             }
 
             // Realtime Subscription
-            supabaseService.subscribeToPricingUpdates((payload) => {
+            convexService.subscribeToPricingUpdates((payload) => {
                 console.log("Realtime pricing update received:", payload);
                 if (payload.new) {
                     this.updateConfigFromRules([payload.new]);

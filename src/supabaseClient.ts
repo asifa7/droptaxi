@@ -188,16 +188,17 @@ export const supabaseService = {
     return data;
   },
 
-  async acceptRide(id: string, driverPhone: string, driverId?: string) {
+  async acceptRide(id: string, driverPhone: string, driverId?: string, driverName?: string, vehicleNumber?: string, vehicleModel?: string) {
     const updatePayload: any = {
       status: 'DRIVER_ACCEPTED',
       driver_phone: driverPhone,
       accepted_at: new Date().toISOString()
     };
 
-    if (driverId) {
-      updatePayload.driver_id = driverId;
-    }
+    if (driverId) updatePayload.driver_id = driverId;
+    if (driverName) updatePayload.driver_name = driverName;
+    if (vehicleNumber) updatePayload.driver_vehicle_number = vehicleNumber;
+    if (vehicleModel) updatePayload.driver_vehicle_model = vehicleModel;
 
     const { data, error } = await supabase
       .from('bookings')
@@ -213,6 +214,51 @@ export const supabaseService = {
     return data;
   },
 
+  async markDriverEnRoute(id: string) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        status: 'DRIVER_EN_ROUTE',
+        en_route_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .eq('status', 'DRIVER_ACCEPTED')
+      .select()
+      .single();
+    if (error) throw new Error(stringifyError(error));
+    return data;
+  },
+
+  async markDriverArrived(id: string) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        status: 'DRIVER_ARRIVED',
+        arrived_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .in('status', ['DRIVER_ACCEPTED', 'DRIVER_EN_ROUTE'])
+      .select()
+      .single();
+    if (error) throw new Error(stringifyError(error));
+    return data;
+  },
+
+  async cancelBooking(id: string, _reason?: string) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        status: 'CANCELLED',
+        cancelled_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .in('status', ['pending', 'REQUESTED', 'DRIVER_ACCEPTED', 'DRIVER_EN_ROUTE', 'DRIVER_ARRIVED'])
+      .select()
+      .single();
+    if (error) throw new Error(stringifyError(error));
+    return data;
+  },
+
   async startRide(id: string) {
     const { data, error } = await supabase
       .from('bookings')
@@ -221,7 +267,7 @@ export const supabaseService = {
         started_at: new Date().toISOString()
       })
       .eq('id', id)
-      .eq('status', 'DRIVER_ACCEPTED')
+      .in('status', ['DRIVER_ACCEPTED', 'DRIVER_EN_ROUTE', 'DRIVER_ARRIVED'])
       .select()
       .single();
     if (error) throw new Error(stringifyError(error));
@@ -428,7 +474,7 @@ export const supabaseService = {
   async getBookingStatus(id: string) {
     const { data, error } = await supabase
       .from('bookings')
-      .select('status, driver_id, driver_phone')
+      .select('status, driver_id, driver_phone, driver_name, driver_vehicle_number, driver_vehicle_model, from_lat, from_lng, to_lat, to_lng, fare_amount, distance_km, car_category, from_name, to_name, accepted_at')
       .eq('id', id)
       .single();
     if (error) throw new Error(stringifyError(error));

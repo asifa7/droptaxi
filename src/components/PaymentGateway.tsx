@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import { COMPANY_VPA, COMMISSION_RATE } from '../constants';
-import { supabaseService } from '../supabaseClient';
 
 interface PaymentGatewayProps {
   amount: number;
@@ -15,6 +16,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({ amount, bookingId, driv
   const [isMobile, setIsMobile] = useState(false);
   const [step, setStep] = useState<'PAY' | 'VERIFY'>('PAY');
   const [isVerifying, setIsVerifying] = useState(false);
+  const confirmPayment = useMutation(api.payments.confirmPayment);
 
   useEffect(() => {
     setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
@@ -35,7 +37,7 @@ const PaymentGateway: React.FC<PaymentGatewayProps> = ({ amount, bookingId, driv
     setIsVerifying(true);
     try {
       // In a real flow, we'd poll or wait for driver confirmation
-      const status = await supabaseService.confirmPayment(bookingId, 'USER');
+      const status = await confirmPayment({ bookingId, role: 'USER' });
       if (status === 'VERIFIED') {
         onSuccess();
       } else {

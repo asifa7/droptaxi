@@ -11,7 +11,9 @@ import RatingModal from './components/RatingModal';
 import RiderHistory from './components/RiderHistory';
 import DriverHistory from './components/DriverHistory';
 import { AppState, BookingDetails, CarCategory, LatLng, UserRole, AgentProfile, PoolType, PoolStatus, TripType } from './types';
-import { supabase, supabaseService, isSupabaseConfigured } from './supabaseClient';
+// import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { convexService, convexClient } from './convexService';
+import { api } from '../convex/_generated/api';
 import { PHONE_NUMBER, BRAND_NAME } from './constants';
 import { poolMatcher } from './services/poolMatcher';
 import { PricingEngine } from './services/pricingService';
@@ -44,7 +46,13 @@ const App: React.FC = () => {
   const [pinningFor, setPinningFor] = useState<string | null>(null);
   const [currentPinAddress, setCurrentPinAddress] = useState<string>('Moving map...');
   const mapCenterRef = useRef<LatLng>({ lat: 12.9716, lng: 77.5946 });
+  const appStateRef = useRef<AppState>(AppState.IDLE);
   const reverseAbortControllerRef = useRef<AbortController | null>(null);
+
+  // Sync appStateRef
+  useEffect(() => {
+    appStateRef.current = appState;
+  }, [appState]);
 
   // Load Wallet Data for Agent
   useEffect(() => {
@@ -52,8 +60,8 @@ const App: React.FC = () => {
       const phone = agentProfile?.phone || userPhone!;
       const loadWallet = async () => {
         try {
-          const wallet = await supabaseService.getWalletDetails(phone);
-          const txs = await supabaseService.getTransactions(phone);
+          const wallet = await convexService.getWalletDetails(phone);
+          const txs = await convexService.getTransactions(phone);
           setAgentProfile(prev => prev ? {
             ...prev,
             balance: wallet.balance,
@@ -81,11 +89,9 @@ const App: React.FC = () => {
 
   // AUTH STATE MANAGEMENT
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
-
     const initAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session } } = await convexService.getSession();
         if (session) {
           setIsLoggedIn(true);
           setUserPhone(session.user.phone);
@@ -97,14 +103,6 @@ const App: React.FC = () => {
     };
     initAuth();
     PricingEngine.fetchAndSyncRules(); // Sync pricing rules on startup
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsLoggedIn(!!session);
-      setUserPhone(session?.user?.phone);
-      setUserId(session?.user?.id);
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   const enhanceTripData = (rawTrip: any): BookingDetails => {
@@ -143,47 +141,72 @@ const App: React.FC = () => {
     };
   };
 
-  const updateBookingStatus = useCallback((status: string, driverPhone?: string) => {
+  const updateBookingStatus = useCallback((status: string, statusData?: any) => {
     setBooking(prev => {
       if (!prev) return null;
-      return { ...prev, status, driverPhone: driverPhone || prev.driverPhone };
+      const updates: any = { status };
+      if (statusData?.driver_phone) updates.driverPhone = statusData.driver_phone;
+      if (statusData?.driver_name) updates.driverName = statusData.driver_name;
+      if (statusData?.driver_vehicle_number) updates.driverVehicleNumber = statusData.driver_vehicle_number;
+      if (statusData?.driver_vehicle_model) updates.driverVehicleModel = statusData.driver_vehicle_model;
+      if (statusData?.fare_amount) updates.fareAmount = statusData.fare_amount;
+      if (statusData?.distance_km) updates.distanceKm = statusData.distance_km;
+      return { ...prev, ...updates };
     });
   }, []);
 
-  // Polling for Booking Status (Rider Side)
+  // Polling for Booking Status (Rider Side) — Full Lifecycle
   useEffect(() => {
     let interval: any;
-    if (role === UserRole.USER && appState === AppState.SEARCHING_DRIVER && booking?.id) {
+    const isRiderWaiting = role === UserRole.USER && (
+      appState === AppState.SEARCHING_DRIVER ||
+      appState === AppState.DRIVER_EN_ROUTE ||
+      appState === AppState.DRIVER_ARRIVED ||
+      appState === AppState.TRIP_ACTIVE
+    ) && booking?.id;
+
+    if (isRiderWaiting) {
       interval = setInterval(async () => {
-        if (!isSupabaseConfigured()) return;
         try {
-          const statusData = await supabaseService.getBookingStatus(booking.id!);
+          const statusData = await convexService.getBookingStatus(booking.id!);
           const status = statusData.status;
+
           if (status === 'COMPLETED' || status === 'completed') {
-            updateBookingStatus('COMPLETED');
+            updateBookingStatus('COMPLETED', statusData);
             setAppState(AppState.RATING);
-          } else if (status === 'DRIVER_ACCEPTED' || status === 'accepted' || status === 'IN_PROGRESS') {
-            updateBookingStatus(status, statusData.driver_phone);
+          } else if (status === 'CANCELLED') {
+            alert('This ride has been cancelled.');
+            setAppState(AppState.IDLE);
+            setBooking(null);
+          } else if (status === 'IN_PROGRESS' || status === 'started') {
+            updateBookingStatus(status, statusData);
             setAppState(AppState.TRIP_ACTIVE);
+          } else if (status === 'DRIVER_ARRIVED') {
+            updateBookingStatus(status, statusData);
+            setAppState(AppState.DRIVER_ARRIVED);
+          } else if (status === 'DRIVER_EN_ROUTE') {
+            updateBookingStatus(status, statusData);
+            // Calculate ETA based on pickup distance (rough: 2min/km)
+            if (booking.fromCoords && statusData.accepted_at) {
+              const acceptedTime = new Date(statusData.accepted_at).getTime();
+              const elapsed = (Date.now() - acceptedTime) / 60000; // minutes elapsed
+              const pickupDist = booking.pickupDistance || 5;
+              const eta = Math.max(1, Math.ceil(pickupDist * 2 - elapsed));
+              setBooking(prev => prev ? { ...prev, driverEta: eta } : null);
+            }
+            setAppState(AppState.DRIVER_EN_ROUTE);
             if (booking.fromCoords) {
               setDriverLoc({ lat: booking.fromCoords.lat + 0.002, lng: booking.fromCoords.lng + 0.002 });
+            }
+          } else if (status === 'DRIVER_ACCEPTED' || status === 'accepted') {
+            updateBookingStatus(status, statusData);
+            setAppState(AppState.DRIVER_EN_ROUTE); // Move to en-route view once driver is assigned
+            if (booking.fromCoords) {
+              setDriverLoc({ lat: booking.fromCoords.lat + 0.003, lng: booking.fromCoords.lng + 0.003 });
             }
           }
         } catch (err) {
           console.error("Status check failed:", err);
-        }
-      }, 4000);
-    } else if (role === UserRole.USER && appState === AppState.TRIP_ACTIVE && booking?.id) {
-      interval = setInterval(async () => {
-        if (!isSupabaseConfigured()) return;
-        try {
-          const statusData = await supabaseService.getBookingStatus(booking.id!);
-          if (statusData.status === 'COMPLETED' || statusData.status === 'completed') {
-            updateBookingStatus('COMPLETED');
-            setAppState(AppState.RATING);
-          }
-        } catch (err) {
-          console.error("Completion check failed:", err);
         }
       }, 4000);
     }
@@ -212,12 +235,20 @@ const App: React.FC = () => {
   }, [enhanceTripData]);
 
   const handleUserBookingUpdate = useCallback((newRide: any) => {
-    if (newRide.status === 'completed') {
+    if (newRide.status === 'completed' || newRide.status === 'COMPLETED') {
       setAppState(AppState.RATING);
       return;
     }
 
-    if (newRide.status === 'accepted') {
+    if (newRide.status === 'CANCELLED') {
+      setAppState(AppState.IDLE);
+      setBooking(null);
+      setDriverLoc(undefined);
+      setDropLoc(undefined);
+      return;
+    }
+
+    if (newRide.status === 'accepted' || newRide.status === 'DRIVER_ACCEPTED') {
       setAppState(AppState.TRIP_ACTIVE);
       if (newRide.from_lat && newRide.from_lng) {
         setDriverLoc({ lat: newRide.from_lat + 0.002, lng: newRide.from_lng + 0.002 });
@@ -238,9 +269,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      if (role === UserRole.DRIVER && isSupabaseConfigured()) {
+      if (role === UserRole.DRIVER) {
         try {
-          const pending = await supabaseService.getPendingRides();
+          const pending = await convexService.getPendingRides();
           const mapped = pending.map(enhanceTripData);
           setRidePool(mapped);
         } catch (err) {
@@ -251,18 +282,27 @@ const App: React.FC = () => {
 
     fetchInitialData();
 
-    if (!isSupabaseConfigured()) return;
+    let unsubscribeDriver: () => void;
+    let unsubscribeRider: () => void;
 
-    const channel = supabase
-      .channel('bookings-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bookings' },
-        handleBookingChange
-      )
-      .subscribe();
+    if (role === UserRole.DRIVER) {
+      unsubscribeDriver = convexClient.onUpdate(api.bookings.getPendingRides, {}, (newRides) => {
+        setRidePool(newRides.map(enhanceTripData));
+      });
+    }
 
-    return () => { supabase.removeChannel(channel); };
+    if (role === UserRole.USER && booking?.id) {
+      unsubscribeRider = convexClient.onUpdate(api.bookings.getBookingStatus, { id: booking.id as any }, (newRide) => {
+        if (newRide) {
+          handleUserBookingUpdate(newRide);
+        }
+      });
+    }
+
+    return () => {
+      if (unsubscribeDriver) unsubscribeDriver();
+      if (unsubscribeRider) unsubscribeRider();
+    };
   }, [role, booking, userLoc, handleBookingChange]);
 
   useEffect(() => {
@@ -329,12 +369,6 @@ const App: React.FC = () => {
         marketMaxFare: metrics?.max
       };
 
-      if (!isSupabaseConfigured()) {
-        const isPool = booking.poolType !== PoolType.SOLO;
-        setBooking({ ...enhancedBooking, id: 'demo-' + Date.now(), poolStatus: isPool ? PoolStatus.WAITING : PoolStatus.IDLE });
-        return;
-      }
-
       const isPool = booking.poolType !== PoolType.SOLO;
       let savedRide;
 
@@ -348,39 +382,60 @@ const App: React.FC = () => {
         });
 
         if (matchId) {
-          savedRide = await supabaseService.joinPool(matchId);
+          savedRide = await convexService.joinPool(matchId);
         } else {
-          savedRide = await supabaseService.createRideRequest(enhancedBooking);
+          savedRide = await convexService.createRideRequest(enhancedBooking);
         }
       } else {
-        savedRide = await supabaseService.createRideRequest(enhancedBooking);
+        savedRide = await convexService.createRideRequest(enhancedBooking);
       }
 
-      setBooking(prev => ({
+      // RACE CONDITION CHECK: If the user cancelled while we were waiting for the server,
+      // the appState would have been reset to IDLE. In that case, we should immediately
+      // delete the "ghost" ride we just created and not update the state.
+      if (appStateRef.current !== AppState.SEARCHING_DRIVER) {
+        console.log("Ride creation finished but user had already cancelled. Deleting ghost ride.");
+        convexService.deleteBooking(savedRide.id); // Cleanup the background record
+        return;
+      }
+
+      // Otherwise, update the booking with its new ID and details
+      setBooking({
         ...enhancedBooking,
         id: savedRide.id,
         poolStatus: savedRide.pool_status,
         poolCount: savedRide.pool_count,
         fareAmount: savedRide.fare_amount
-      }));
+      });
 
     } catch (e: any) {
-      alert(`Booking Error: ${e.message}`);
-      setAppState(AppState.SELECTING_VEHICLE);
+      // Only show error if we are still searching; if cancelled, ignore
+      if (appStateRef.current === AppState.SEARCHING_DRIVER) {
+        alert(`Booking Error: ${e.message}`);
+        setAppState(AppState.SELECTING_VEHICLE);
+      }
     }
   };
 
   const handleAcceptRide = async (ride: BookingDetails) => {
     try {
       const driverIdentifier = agentProfile?.phone || userPhone || 'anonymous-driver';
-      const { data } = await supabase.auth.getSession();
+      const { data } = await convexService.getSession();
       const driverId = data.session?.user?.id;
 
-      if (isSupabaseConfigured() && ride.id) {
-        await supabaseService.acceptRide(ride.id, driverIdentifier, driverId);
+      if (ride.id) {
+        await convexService.acceptRide(
+          ride.id,
+          driverIdentifier,
+          driverId,
+          agentProfile?.name,
+          agentProfile?.vehicleNumber,
+          agentProfile?.vehicleModel
+        );
       }
-      setBooking(ride);
-      setAppState(AppState.TRIP_ACTIVE);
+      const acceptedRide = { ...ride, status: 'DRIVER_ACCEPTED' };
+      setRidePool(prev => prev.map(r => r.id === ride.id ? acceptedRide : r));
+      setBooking(acceptedRide);
     } catch (err: any) {
       const msg = err.message || String(err);
       alert(msg === "RIDE_ALREADY_TAKEN" ? "This ride was already claimed." : `Error: ${msg}`);
@@ -402,15 +457,11 @@ const App: React.FC = () => {
   const handleCompleteRide = async (ride: BookingDetails) => {
     if (!ride.id) return;
     try {
-      if (isSupabaseConfigured()) {
-        await supabaseService.completeRide(ride.id, ride.fareAmount || 0, ride.distanceKm || 0);
-        setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: 'COMPLETED' } : r));
+      await convexService.completeRide(ride.id, ride.fareAmount || 0, ride.distanceKm || 0);
+      setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: 'COMPLETED' } : r));
 
-        const rideIdToCleanup = ride.id;
-        setTimeout(() => cleanupRideFromPool(rideIdToCleanup), 5000);
-      } else {
-        setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: 'COMPLETED' } : r));
-      }
+      const rideIdToCleanup = ride.id;
+      setTimeout(() => cleanupRideFromPool(rideIdToCleanup), 5000);
     } catch (err: any) {
       console.error("Complete ride failed:", err);
       alert("Failed to complete ride: " + err.message);
@@ -420,16 +471,60 @@ const App: React.FC = () => {
   const handleStartRide = async (ride: BookingDetails) => {
     if (!ride.id) return;
     try {
-      if (isSupabaseConfigured()) {
-        const updated = await supabaseService.startRide(ride.id);
-        setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: updated.status } : r));
-        setBooking(prev => prev?.id === ride.id ? { ...prev, status: updated.status } : prev);
-      } else {
-        setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: 'IN_PROGRESS' } : r));
-      }
+      const updated = await convexService.startRide(ride.id);
+      setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: updated.status } : r));
+      setBooking(prev => prev?.id === ride.id ? { ...prev, status: updated.status } : prev);
     } catch (err: any) {
       console.error("Start ride failed:", err);
       alert("Failed to start ride: " + err.message);
+    }
+  };
+
+  const handleEnRoute = async (ride: BookingDetails) => {
+    if (!ride.id) return;
+    try {
+      const updated = await convexService.markDriverEnRoute(ride.id);
+      setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: updated.status } : r));
+      setBooking(prev => prev?.id === ride.id ? { ...prev, status: updated.status } : prev);
+    } catch (err: any) {
+      console.error("En route update failed:", err);
+      alert("Failed to update status: " + err.message);
+    }
+  };
+
+  const handleDriverArrived = async (ride: BookingDetails) => {
+    if (!ride.id) return;
+    try {
+      const updated = await convexService.markDriverArrived(ride.id);
+      setRidePool(prev => prev.map(r => r.id === ride.id ? { ...r, status: updated.status } : r));
+      setBooking(prev => prev?.id === ride.id ? { ...prev, status: updated.status } : prev);
+    } catch (err: any) {
+      console.error("Arrived update failed:", err);
+      alert("Failed to update status: " + err.message);
+    }
+  };
+
+  const handleCancelRide = async () => {
+    const bookingId = booking?.id;
+
+    // Always reset UI state first for immediate responsiveness
+    setAppState(AppState.IDLE);
+    setBooking(null);
+    setDriverLoc(undefined);
+    setDropLoc(undefined);
+
+    if (!bookingId) {
+      console.log("No booking ID found to cancel on backend, but UI state has been reset.");
+      return;
+    }
+
+    try {
+      console.log(`Attempting to cancel/delete booking: ${bookingId}`);
+      await convexService.cancelBooking(bookingId);
+      console.log("Ride successfully cancelled on backend.");
+    } catch (err: any) {
+      console.error("Cancel ride backend request failed:", err);
+      // We already reset the UI, so we just log the backend failure
     }
   };
 
@@ -453,7 +548,7 @@ const App: React.FC = () => {
   const handleRatingSubmit = async (stars: number, tags: string[], comment: string) => {
     if (!booking) return;
     try {
-      await supabaseService.submitRating({
+      await convexService.submitRating({
         bookingId: booking.id!,
         ratedBy: role,
         ratedUserId: role === UserRole.USER ? (booking.driverPhone || 'driver') : (booking.phone || 'user'),
@@ -473,7 +568,7 @@ const App: React.FC = () => {
 
   const handleTriggerPayment = async () => {
     if (booking?.id) {
-      await supabaseService.initiatePaymentVerification(booking.id, booking.fareAmount || 0);
+      await convexService.initiatePaymentVerification(booking.id, booking.fareAmount || 0);
       setAppState(AppState.PAYMENT);
     }
   };
@@ -482,7 +577,7 @@ const App: React.FC = () => {
     const phone = agentProfile?.phone || userPhone;
     if (!phone) return;
     try {
-      await supabaseService.requestWithdrawal(phone, amount, upiId);
+      await convexService.requestWithdrawal(phone, amount, upiId);
       alert("Withdrawal request submitted! Payout will reflect in 24-48 hours.");
       setAgentProfile(prev => prev ? { ...prev, balance: prev.balance - amount } : null);
     } catch (err) {
@@ -607,7 +702,7 @@ const App: React.FC = () => {
                       try {
                         const phone = agentProfile?.phone || userPhone;
                         if (phone) {
-                          const updated = await supabaseService.toggleDriverStatus(phone, newState);
+                          const updated = await convexService.toggleDriverStatus(phone, newState);
                           setAgentProfile(prev => prev ? { ...prev, isOnline: updated.is_online } : null);
                         }
                       } catch (err: any) {
@@ -645,6 +740,8 @@ const App: React.FC = () => {
                     onReject={handleRejectRide}
                     onStart={handleStartRide}
                     onComplete={handleCompleteRide}
+                    onEnRoute={handleEnRoute}
+                    onArrived={handleDriverArrived}
                   />
                 ))
               )}
@@ -677,6 +774,7 @@ const App: React.FC = () => {
         onCancel={() => { setAppState(AppState.IDLE); setBooking(null); }}
         bookingDetails={booking || undefined}
         onPay={handleTriggerPayment}
+        onCancelRide={handleCancelRide}
       />
     </div>
   );
